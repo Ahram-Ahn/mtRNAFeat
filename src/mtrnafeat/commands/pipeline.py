@@ -22,10 +22,8 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pathlib import Path
 
 from mtrnafeat.config import Config
-
 
 INDEPENDENT = (
     "stats", "landscape", "features",
@@ -89,7 +87,7 @@ def _sequential(cfg: Config, skip: set[str]) -> None:
             failures.append((name, f"exit {rc}"))
             print(f"  ✗ {name} FAILED (exit {rc})")
     if failures:
-        print(f"[mtrnafeat] pipeline complete WITH FAILURES: " + ", ".join(f"{n} ({why})" for n, why in failures))
+        print("[mtrnafeat] pipeline complete WITH FAILURES: " + ", ".join(f"{n} ({why})" for n, why in failures))
     else:
         print("[mtrnafeat] pipeline complete.")
 
@@ -122,9 +120,9 @@ def _parallel(cfg: Config, skip: set[str], config_path: str | None) -> None:
 
     total = int(time.time() - started)
     print(f"[mtrnafeat] pipeline complete — wall {total}s")
-    print(f"[mtrnafeat] per-stage time: " + ", ".join(f"{k}={v}s" for k, v in finished.items()))
+    print("[mtrnafeat] per-stage time: " + ", ".join(f"{k}={v}s" for k, v in finished.items()))
     if failures:
-        print(f"[mtrnafeat] FAILURES: " + ", ".join(f"{n} (exit {rc})" for n, rc in failures))
+        print("[mtrnafeat] FAILURES: " + ", ".join(f"{n} (exit {rc})" for n, rc in failures))
 
 
 def run(cfg: Config, args: list[str] | None = None) -> int:

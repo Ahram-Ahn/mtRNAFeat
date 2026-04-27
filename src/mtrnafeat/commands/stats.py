@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from mtrnafeat.analysis.statistics import per_transcript_stats, add_centroid_distances
+from mtrnafeat.analysis.statistics import add_centroid_distances, per_transcript_stats
 from mtrnafeat.config import Config
 from mtrnafeat.io.writers import canonical_csv, tables_csv
 from mtrnafeat.viz import stats_plot

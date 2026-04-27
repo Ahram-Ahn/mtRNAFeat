@@ -28,7 +28,6 @@ from mtrnafeat.viz.style import (
     style_axis,
 )
 
-
 Z_PEAK_THRESHOLD = 2.0
 SMOOTH_WINDOW = 5
 

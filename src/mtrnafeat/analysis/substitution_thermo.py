@@ -38,7 +38,6 @@ import random
 from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 import pandas as pd

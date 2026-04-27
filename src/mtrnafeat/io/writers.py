@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+
 import pandas as pd
 
 from mtrnafeat.constants import CSV_FLOAT_FORMAT

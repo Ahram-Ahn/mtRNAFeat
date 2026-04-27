@@ -32,7 +32,7 @@ from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
 from mtrnafeat.core.cofold import cofold_dG
-from mtrnafeat.core.projection import project_structure_to_window, truncate_prefix
+from mtrnafeat.core.projection import project_structure_to_window
 from mtrnafeat.core.structure import filter_max_bp_span
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step

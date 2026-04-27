@@ -5,8 +5,6 @@ package never imports `RNA` directly. Tests can mock this module wholesale.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 try:
     import RNA  # type: ignore
 except ImportError as e:
@@ -25,7 +23,7 @@ def _require_rna() -> None:
         )
 
 
-def fold_mfe(seq: str, max_bp_span: Optional[int] = None) -> tuple[str, float]:
+def fold_mfe(seq: str, max_bp_span: int | None = None) -> tuple[str, float]:
     """Return (dot-bracket, MFE in kcal/mol)."""
     _require_rna()
     if max_bp_span is None:
@@ -38,7 +36,7 @@ def fold_mfe(seq: str, max_bp_span: Optional[int] = None) -> tuple[str, float]:
     return struct, float(mfe)
 
 
-def eval_structure(seq: str, structure: str, max_bp_span: Optional[int] = None) -> float:
+def eval_structure(seq: str, structure: str, max_bp_span: int | None = None) -> float:
     """Energy of a given dot-bracket structure under the standard NN model."""
     _require_rna()
     if max_bp_span is None:

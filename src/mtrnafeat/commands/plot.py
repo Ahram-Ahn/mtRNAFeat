@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from mtrnafeat.config import Config
-from mtrnafeat.viz import landscape_plot, features_plot
+from mtrnafeat.viz import features_plot, landscape_plot
 from mtrnafeat.viz.style import plot_path
 
 

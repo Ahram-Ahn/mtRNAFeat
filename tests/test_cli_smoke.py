@@ -6,12 +6,10 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
 from tests.conftest import needs_rna
-
 
 SUBCOMMANDS = [
     ("stats", []),

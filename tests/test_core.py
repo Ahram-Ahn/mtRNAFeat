@@ -41,15 +41,19 @@ def test_paired_fraction():
 
 
 def test_filter_max_bp_span_drops_long():
+    # Pairs in s: (0,7) span=7, (1,6) span=5, (10,25) span=15, (11,24) span=13,
+    # (12,23) span=11, (13,22) span=9. With max_bp_span=10, three spans are >10.
     s = "((....))..((((........))))"
     new_s, removed = filter_max_bp_span(s, max_bp_span=10)
-    assert removed == 1
+    assert removed == 3
     assert new_s.count("(") < s.count("(")
 
 
 def test_sanitize_dangling():
-    assert sanitize_dangling("((..)") == "(...."  # left-most '(' is unmatched
-    assert sanitize_dangling("(..))") == "....)" or sanitize_dangling("(..))") == "(....)" or True
+    # Left-most '(' is unmatched and is replaced with '.'
+    assert sanitize_dangling("((..)") == ".(..)"
+    # Right-most ')' is unmatched and is replaced with '.'; matched pair (0,3) is preserved.
+    assert sanitize_dangling("(..))") == "(..)."
 
 
 def test_project_window_keeps_only_internal_pairs():
@@ -93,9 +97,11 @@ def test_dinuc_shuffle_preserves_di_counts():
 
 
 def test_stack_dG_canonical():
-    # GC/CG family is the most negative.
-    g = stack_dG("G", "C", "C", "G")  # 5'-GC-3' / 3'-CG-5'
-    a = stack_dG("A", "U", "U", "A")
+    # Function signature is stack_dG(t5, t3, b5, b3) where b5 pairs with t3 and
+    # b3 pairs with t5. For 5'-GC-3' / 3'-CG-5': t5=G, t3=C, b5=G (under t3=C),
+    # b3=C (under t5=G).
+    g = stack_dG("G", "C", "G", "C")  # 5'-GC-3' / 3'-CG-5'
+    a = stack_dG("A", "U", "A", "U")  # 5'-AU-3' / 3'-UA-5'
     assert g < a  # G-C / C-G stack stronger than A-U / U-A
 
 

@@ -1,11 +1,9 @@
 """Tests for io/ layer: parser round-trip, gene normalization, alignment."""
 from __future__ import annotations
 
-import pytest
-
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.io.alignment import codon_position_changes, parse_pal2nal
-from mtrnafeat.io.annotations import annotation_for, annotation_df
+from mtrnafeat.io.annotations import annotation_df, annotation_for
 from mtrnafeat.io.db_parser import get_record, list_genes, parse_db
 
 

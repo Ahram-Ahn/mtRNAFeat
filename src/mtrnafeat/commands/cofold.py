@@ -14,7 +14,6 @@ from mtrnafeat.analysis import cofold_sweep
 from mtrnafeat.config import Config
 from mtrnafeat.io.writers import canonical_csv, tables_csv
 from mtrnafeat.viz import cofold_plot
-from mtrnafeat.viz.style import plot_path
 
 
 def _parse(args: list[str] | None) -> dict:

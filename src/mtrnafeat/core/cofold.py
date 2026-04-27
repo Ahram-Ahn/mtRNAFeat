@@ -21,8 +21,6 @@ results can be compared directly.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from mtrnafeat.core.thermo import _require_rna
@@ -36,7 +34,7 @@ def _penalty_kcal(distance: int, alpha: float, tau: float) -> float:
 
 
 def cofold_dG(seq: str, alpha: float = 0.5, tau: float = 640.0,
-              max_bp_span: Optional[int] = None,
+              max_bp_span: int | None = None,
               min_pair_distance: int = 4) -> tuple[str, float]:
     """Fold `seq` under the CoFold soft long-range penalty.
 
@@ -84,7 +82,7 @@ def cofold_dG(seq: str, alpha: float = 0.5, tau: float = 640.0,
 
 
 def cofold_eval(seq: str, structure: str, alpha: float = 0.5, tau: float = 640.0,
-                 max_bp_span: Optional[int] = None) -> float:
+                 max_bp_span: int | None = None) -> float:
     """Energy of `structure` under the CoFold-modified scoring (kcal/mol).
 
     Computes Vienna's plain eval_structure plus the sum of CoFold penalties

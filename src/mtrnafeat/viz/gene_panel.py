@@ -19,11 +19,11 @@ import numpy as np
 from mtrnafeat.analysis.statistics import paired_composition, sequence_gc_pct
 from mtrnafeat.io.db_parser import DbRecord
 from mtrnafeat.viz.style import (
-    apply_theme,
-    style_axis,
-    shade_regions,
     LABEL_FONTSIZE,
     TITLE_FONTSIZE,
+    apply_theme,
+    shade_regions,
+    style_axis,
 )
 
 

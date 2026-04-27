@@ -17,7 +17,6 @@ from mtrnafeat.analysis import substitution_thermo
 from mtrnafeat.config import Config
 from mtrnafeat.io.writers import canonical_csv
 from mtrnafeat.viz import substitution_plot
-from mtrnafeat.viz.style import plot_path
 
 
 def _parse(args: list[str] | None) -> dict:

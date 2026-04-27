@@ -9,9 +9,9 @@ import pandas as pd
 
 from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
-from mtrnafeat.core.shuffle import random_gc_sequence
 from mtrnafeat.core import thermo
-from mtrnafeat.core.structure import parse_element_sizes, extract_pairs
+from mtrnafeat.core.shuffle import random_gc_sequence
+from mtrnafeat.core.structure import extract_pairs, parse_element_sizes
 from mtrnafeat.io.annotations import annotation_for, classify_region
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step

@@ -19,7 +19,6 @@ import numpy as np
 
 from mtrnafeat.core.structure import pair_table
 
-
 # Mathews 1999 (Table 4 / Vienna Turner 1999 set) values in kcal/mol.
 # Key: ((top5, top3), (bot3, bot5)) where bottom is read 3'->5'.
 # Equivalently: 5'-AB-3' paired with 3'-CD-5'.

@@ -10,7 +10,6 @@ from pathlib import Path
 from mtrnafeat import __version__
 from mtrnafeat.config import Config, load_config
 
-
 SUBCOMMANDS = {
     "stats": "mtrnafeat.commands.stats",
     "landscape": "mtrnafeat.commands.landscape",

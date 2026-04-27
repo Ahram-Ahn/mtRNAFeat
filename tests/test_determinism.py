@@ -5,11 +5,8 @@ Skipped when ViennaRNA is not installed.
 from __future__ import annotations
 
 import hashlib
-import shutil
 import subprocess
 import sys
-
-import pytest
 
 from tests.conftest import needs_rna
 

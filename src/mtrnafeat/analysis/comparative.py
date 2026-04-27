@@ -7,14 +7,12 @@ codon frame.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
 from mtrnafeat.config import Config
 from mtrnafeat.core import thermo
-from mtrnafeat.io.alignment import CodonAlignment, codon_position_changes, parse_pal2nal
+from mtrnafeat.io.alignment import codon_position_changes, parse_pal2nal
 from mtrnafeat.io.codons import HUMAN_MT_CODON_TABLE, YEAST_MT_CODON_TABLE
 from mtrnafeat.io.db_parser import get_record
 
