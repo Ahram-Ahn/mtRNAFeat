@@ -1,0 +1,162 @@
+# mtrnafeat — annotated configuration template.
+#
+# Every field below mirrors a field of the Config dataclass at
+# src/mtrnafeat/config.py. Default values are filled in; copy this file,
+# edit in place, and pass via:
+#
+#   mtrnafeat run-all --config path/to/this.yaml --outdir runs/x
+#
+# Validation: unknown keys raise ValueError at load time
+# (src/mtrnafeat/config.py, _apply()). To override a single value from the
+# CLI without editing the file, use the global flags:
+#
+#   mtrnafeat <subcommand> --config path/to/this.yaml --outdir runs/y --seed 7
+#
+# See docs/CONFIG.md for prose explanations of every field.
+
+# ─────────────────────────── I/O ───────────────────────────
+# Root directory containing the .db files and alignment file.
+data_dir: data
+
+# Output root. Per-stage subdirectories are created underneath
+# (stats/, landscape/, ... plus a centralized tables/).
+outdir: runs/default
+
+# Mapping species → .db filename (resolved relative to data_dir).
+# Add or remove species here; each .db file uses the 3-line format
+# (>GENE: -X kcal/mol \n SEQUENCE \n DOTBRACKET).
+db_files:
+  Human: human_mt-mRNA_all.db
+  Yeast: yeast_mt-mRNA_all.db
+
+# Codon-aligned PAL2NL alignment for the comparative COX1 stage.
+# Resolved relative to data_dir. The `compare` stage skips silently if
+# this file is missing.
+alignment_file: PAL2NL_aa-dna_alignment_yeast_human.txt
+
+# ──────────────────────── Determinism ────────────────────────
+# Seed for every RNG used by the pipeline (numpy, shuffle, simulation).
+# Override on the CLI with `--seed N`.
+seed: 42
+
+# ────────────── Simulation (landscape / significance) ──────────────
+# Length of each simulated random sequence (nt).
+sim_seq_length: 150
+
+# Number of simulated sequences per condition for the landscape clouds.
+sim_num_sequences: 1500
+
+# Number of GC% steps in the gradient curve (e.g. 21 → 0%, 5%, ..., 100%).
+gradient_steps: 21
+
+# Sequences sampled per gradient step.
+gradient_seqs_per_step: 200
+
+# Symmetric-GC null conditions for the landscape stage. Key is the legend
+# label; value is the target GC fraction (0–1). A=U=(1-GC)/2, G=C=GC/2.
+sim_gc_conditions:
+  "Sim Human (46% GC)": 0.46
+  "Sim Yeast CDS (30% GC)": 0.30
+  "Sim Yeast 5' UTR (7% GC)": 0.07
+
+# Per-species (A, U, G, C) frequencies used to seed simulated nulls in
+# `analysis.landscape`. Empty {} → empirical frequencies are computed
+# from the .db files at runtime (default; honors actual H-strand
+# enrichment for human). Override to model e.g. H-strand-only or
+# L-strand-only composition:
+#
+#   sim_freqs_per_species:
+#     Human: {A: 0.30, U: 0.25, G: 0.22, C: 0.23}
+#     Yeast: {A: 0.42, U: 0.42, G: 0.08, C: 0.08}
+sim_freqs_per_species: {}
+
+# Dinucleotide-shuffle iterations for the significance stage z-scores.
+n_shuffles: 200
+
+# ──────────────────────── Parallelism ────────────────────────
+# Worker pool size for stages that fan out per-gene (window, substitution,
+# cofold, ...). The `run-all --parallel` orchestrator uses up to
+# min(len(stages)+1, cpu_count()) workers separately.
+n_workers: 4
+
+# ────────────────────────── Genes ──────────────────────────
+# Gene whitelist. The pipeline iterates (species × target_genes); a pair
+# is silently skipped if the gene is not in that species's .db. The
+# default list is the union of human + yeast mt-mRNAs.
+target_genes:
+  # Shared by both species
+  - COX1
+  - COX2
+  - COX3
+  - ATP86          # ATP8/ATP6 joined transcript
+  # Human-only
+  - CYTB
+  - ND1
+  - ND2
+  - ND3
+  - ND4L4          # ND4L/ND4 joined transcript
+  - ND5
+  - ND6
+  # Yeast-only
+  - ATP9
+  - COB
+  - VAR1
+
+# ─────────────────────── Window scan ───────────────────────
+# Sliding-window length (nt) for the window stage.
+window_nt: 120
+
+# Slide step between windows (nt).
+step_nt: 10
+
+# Maximum base-pair span passed to ViennaRNA fold (nt). 300 is the
+# publication-relevant default; larger values approach unrestricted MFE.
+max_bp_span: 300
+
+# Currently unused by the pipeline; retained for ad-hoc window-size
+# sensitivity exploration.
+window_size_sweep: [60, 120, 240]
+
+# ─────────────────────────── CoFold ───────────────────────────
+# Co-transcriptional folding model (Proctor & Meyer 2013, NAR):
+# soft penalty f(d) = alpha * (1 - exp(-d / tau)) on long-range pairs.
+#
+# Single-point CoFold parameters (used where CoFold is invoked directly).
+cofold_alpha: 0.5      # penalty strength (kcal/mol)
+cofold_tau: 640.0      # decay constant (nt) — ≈ 50 nt/s × 12.8 s window
+
+# Sweep grids exercised by the `cofold` parameter-sweep stage. Each
+# (alpha, tau) cell is folded against every transcript and scored
+# against the experimental DMS structure.
+cofold_alpha_sweep: [0.0, 0.25, 0.5, 0.75, 1.0]
+cofold_tau_sweep:   [160.0, 320.0, 640.0, 1280.0, 2560.0]
+
+# Folding engine selector. "vienna" is the only supported value today;
+# the dedicated `cofold` stage exercises CoFold itself separately.
+fold_engine: vienna
+
+# ────────────────────────── Features ──────────────────────────
+# Loop sizes above this threshold (nt) are treated as folding artifacts
+# and dropped from the element decomposition.
+max_loop_artifact_size: 50
+
+# Heatmap axis cap for the features-stage size-ratio plots.
+max_heatmap_size: 15
+
+# ─────────────── Substitution-thermo permutation ───────────────
+# Number of synonymous-recoding null pools generated per (species, gene).
+# Each pool is folded under CoFold and compared to the wild-type ΔG.
+substitution_n_simulations: 200
+
+# Codon-truncation cap for substitution permutation (nt). Sequences
+# longer than this are truncated to the first substitution_max_nt nt
+# before recoding to keep folding tractable.
+substitution_max_nt: 300
+
+# ──────────────────────────── Plot ────────────────────────────
+# Figure DPI for raster output.
+dpi: 300
+
+# Plot file format. svg is editable in Inkscape/Illustrator;
+# png is convenient for quick viewing; pdf for LaTeX inclusion.
+plot_format: svg
