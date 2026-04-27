@@ -38,7 +38,7 @@ gradient_steps: 21
 gradient_seqs_per_step: 200
 n_shuffles: 200
 
-window_nt: 120
+window_nt: 50
 step_nt: 10
 max_bp_span: 300
 
