@@ -1,0 +1,37 @@
+# venv / caches
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+
+# build artifacts
+build/
+dist/
+*.egg-info/
+
+# pipeline outputs and data (never commit run results or raw inputs)
+runs/
+data/
+test_data/
+legacy/
+
+# planning / scratch / source-of-truth-elsewhere
+report/
+
+# binary / proprietary documents (markdown stays in repo)
+*.docx
+*.pdf
+*.xlsx
+
+# notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# editor noise
+.vscode/
+.idea/
+*.swp

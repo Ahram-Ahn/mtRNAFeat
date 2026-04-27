@@ -1,0 +1,46 @@
+# Default configuration. Mirror of the Config dataclass defaults.
+# `mtrnafeat run-all` without --config uses these values.
+seed: 42
+data_dir: data
+outdir: runs/default
+
+target_genes:
+  - COX1
+  - COX2
+  - COX3
+  - ATP86
+  - CYTB
+  - ND1
+  - ND2
+  - ND3
+  - ND4L4
+  - ND5
+  - ND6
+  - ATP9
+  - COB
+  - VAR1
+
+n_workers: 4
+
+sim_seq_length: 150
+sim_num_sequences: 1500
+gradient_steps: 21
+gradient_seqs_per_step: 200
+n_shuffles: 200
+
+window_nt: 120
+step_nt: 10
+max_bp_span: 300
+
+cofold_alpha: 0.5
+cofold_tau: 640.0
+fold_engine: vienna
+
+substitution_n_simulations: 200
+substitution_max_nt: 300
+
+max_loop_artifact_size: 50
+max_heatmap_size: 15
+
+dpi: 300
+plot_format: svg

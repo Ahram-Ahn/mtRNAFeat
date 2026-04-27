@@ -1,0 +1,56 @@
+# Canonical all-species config.
+#
+# Single run that covers every mRNA in both Human and Yeast .db files.
+# `target_genes` is the union of what each species has — the per-stage
+# analysis loops skip a (species, gene) pair when the gene isn't in that
+# species's .db.
+#
+# Use this config for the real run:
+#   mtrnafeat run-all --parallel --config configs/all.yaml --outdir runs/all
+seed: 42
+data_dir: data
+outdir: runs/all
+
+target_genes:
+  # Shared by both species
+  - COX1
+  - COX2
+  - COX3
+  - ATP86          # ATP8/ATP6 joined transcript
+  # Human-only
+  - CYTB
+  - ND1
+  - ND2
+  - ND3
+  - ND4L4          # ND4L/ND4 joined transcript
+  - ND5
+  - ND6
+  # Yeast-only
+  - ATP9
+  - COB
+  - VAR1
+
+n_workers: 4
+
+sim_seq_length: 150
+sim_num_sequences: 1500
+gradient_steps: 21
+gradient_seqs_per_step: 200
+n_shuffles: 200
+
+window_nt: 120
+step_nt: 10
+max_bp_span: 300
+
+cofold_alpha: 0.5
+cofold_tau: 640.0
+fold_engine: vienna
+
+substitution_n_simulations: 200
+substitution_max_nt: 300
+
+max_loop_artifact_size: 50
+max_heatmap_size: 15
+
+dpi: 300
+plot_format: svg

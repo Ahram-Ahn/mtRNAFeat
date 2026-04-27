@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mtrnafeat"
+version = "0.1.0"
+description = "Mitochondrial mRNA structural-feature analysis: DMS-MaPseq vs Vienna MFE, codon-substitution thermodynamics, CoFold parameter sweep."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Ahram Ahn" }]
+license = { text = "MIT" }
+dependencies = [
+    "viennarna>=2.5",
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "pyyaml>=6.0",
+    "biopython>=1.83",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+kinetic = ["drtransformer>=0.13"]
+labels = ["adjustText>=1.0"]
+dev = ["pytest>=7.4", "pytest-cov", "ruff>=0.5"]
+
+[project.scripts]
+mtrnafeat = "mtrnafeat.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mtrnafeat = ["py.typed"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
