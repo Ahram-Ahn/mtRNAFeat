@@ -1,4 +1,4 @@
-"""`mtrnafeat tis` — 5'-end zoom: first 50 nt of every transcript, DMS vs Vienna."""
+"""`mtrnafeat tis` — TIS zoom: −50 / +50 nt around start codon, DMS vs Vienna."""
 from __future__ import annotations
 
 from mtrnafeat.analysis import tis
@@ -11,8 +11,8 @@ from mtrnafeat.viz.style import plot_path
 def run(cfg: Config, args: list[str] | None = None) -> int:
     out = cfg.outdir / "tis"
     out.mkdir(parents=True, exist_ok=True)
-    df = tis.tis_table(cfg, window_len=50)
+    df = tis.tis_table(cfg, upstream_nt=50, downstream_nt=50)
     canonical_csv(df, out / "tis_dms_vs_mfe.csv")
     tables_csv(df, cfg.outdir, "tis_dms_vs_mfe")
-    tis_plot.tis_zoom_panel(df, plot_path(out, "tis_5end_grid", cfg.plot_format), dpi=cfg.dpi)
+    tis_plot.tis_zoom_panel(df, plot_path(out, "tis_zoom_grid", cfg.plot_format), dpi=cfg.dpi)
     return 0
