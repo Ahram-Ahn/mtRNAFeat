@@ -54,20 +54,23 @@ def features_dms(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(motifs), pd.DataFrame(spans)
 
 
-def features_simulated(cfg: Config, conditions: dict[str, float] | None = None,
+def features_simulated(cfg: Config, conditions: list[tuple[str, float]] | None = None,
                         n_per_condition: int = 500, length: int = 300) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Simulate per-species GC-matched controls. Species column is the real species
+    name (Human/Yeast); the Type column ("Sim") is the disambiguator from DMS.
+    """
     if conditions is None:
-        conditions = {"Sim Human": 0.46, "Sim Yeast": 0.20}
+        conditions = [("Human", 0.46), ("Yeast", 0.20)]
     rng = make_rng(cfg.seed + 2)
     motifs, spans = [], []
     step(f"simulating features for {len(conditions)} conditions × {n_per_condition} sequences")
-    for label, gc in conditions.items():
-        for k in progress(range(n_per_condition), desc=f"sim {label}", unit="seq"):
+    for species, gc in conditions:
+        for k in progress(range(n_per_condition), desc=f"sim {species}", unit="seq"):
             seq = random_gc_sequence(length, gc, rng)
             struct, _ = thermo.fold_mfe(seq)
-            sim_id = f"{label}_{k}"
-            motifs.extend(extract_motifs_from_record(label, "Sim", sim_id, struct, cfg.max_loop_artifact_size))
-            spans.extend(extract_spans_from_record(label, "Sim", sim_id, struct))
+            sim_id = f"Sim_{species}_{k}"
+            motifs.extend(extract_motifs_from_record(species, "Sim", sim_id, struct, cfg.max_loop_artifact_size))
+            spans.extend(extract_spans_from_record(species, "Sim", sim_id, struct))
     return pd.DataFrame(motifs), pd.DataFrame(spans)
 
 

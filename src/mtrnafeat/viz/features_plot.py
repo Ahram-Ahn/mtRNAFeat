@@ -17,7 +17,7 @@ from mtrnafeat.viz.style import apply_theme, style_axis, LABEL_FONTSIZE, TITLE_F
 
 
 def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, dpi: int = 300) -> Path:
-    """For each (Species, Type), heatmap of element-size enrichment."""
+    """Per-species heatmap of element-size enrichment; Sim columns left, DMS right."""
     apply_theme()
     motifs = ["Macro_Helix", "Hairpin", "Bulge", "Internal_Loop"]
     df = df_motifs[df_motifs["Motif"].isin(motifs)].copy()
@@ -26,23 +26,53 @@ def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, 
     counts["Total"] = counts.groupby(["Species", "Type", "Motif"])["Count"].transform("sum")
     counts["Ratio_Pct"] = 100.0 * counts["Count"] / counts["Total"]
 
-    species_list = sorted(df["Species"].unique())
-    fig, axes = plt.subplots(1, len(species_list), figsize=(8 * len(species_list), 7))
+    species_list = ["Human", "Yeast"]
+    fig, axes = plt.subplots(1, len(species_list), figsize=(8 * len(species_list), 7.5))
     if len(species_list) == 1:
         axes = [axes]
+
+    motif_display = [m.replace("_", " ") for m in motifs]
     for ax, species in zip(axes, species_list):
         sub = counts[counts["Species"] == species].copy()
-        sub["Col_Name"] = sub["Type"].str.upper() + " — " + sub["Motif"].str.replace("_", " ")
-        pivot = sub.pivot(index="Size_Cap", columns="Col_Name", values="Ratio_Pct").fillna(0)
+        if sub.empty:
+            ax.set_visible(False)
+            continue
+        sub["Display_Motif"] = sub["Motif"].str.replace("_", " ")
+        pivot = sub.pivot_table(index="Size_Cap", columns=["Type", "Display_Motif"],
+                                  values="Ratio_Pct", aggfunc="sum").fillna(0)
+        ordered_cols = [(t, m) for t in ("Sim", "DMS") for m in motif_display if (t, m) in pivot.columns]
+        pivot = pivot.reindex(columns=ordered_cols)
         idx = [str(int(i)) if i != max_size + 1 else f"{max_size}+" for i in pivot.index]
         pivot.index = idx
-        sns.heatmap(pivot, ax=ax, cmap="Reds", annot=True, fmt=".1f", linewidths=0.6,
-                    cbar_kws={"label": "Enrichment (%)"})
-        ax.set_title(f"{species} structural-element size enrichment",
-                     fontsize=TITLE_FONTSIZE, pad=12)
-        ax.set_xlabel("Source — element", fontsize=LABEL_FONTSIZE)
-        ax.set_ylabel("Element size (nt or bp)", fontsize=LABEL_FONTSIZE)
-        ax.tick_params(axis="x", rotation=35)
+        col_labels = [m for _, m in ordered_cols]
+        pivot.columns = col_labels
+
+        sns.heatmap(pivot, ax=ax, cmap="Reds", annot=False, linewidths=0.5, square=True,
+                    cbar_kws={"label": "Enrichment (%)", "shrink": 0.7})
+        ax.xaxis.tick_top()
+        ax.xaxis.set_label_position("top")
+        ax.tick_params(axis="x", rotation=35, labelsize=11)
+        ax.tick_params(axis="y", labelsize=11)
+        for lbl in ax.get_xticklabels():
+            lbl.set_horizontalalignment("left")
+            lbl.set_fontweight("bold")
+
+        sim_count = sum(1 for t, _ in ordered_cols if t == "Sim")
+        dms_count = sum(1 for t, _ in ordered_cols if t == "DMS")
+        if sim_count:
+            ax.annotate("Simulated Baseline", xy=(sim_count / 2.0, -1.4), xycoords="data",
+                         ha="center", va="bottom", fontsize=12, weight="bold", color="gray")
+            ax.plot([0.1, sim_count - 0.1], [-1.0, -1.0], color="gray", lw=2.5, clip_on=False)
+        if dms_count:
+            ax.annotate("DMS-Probed (In organello)", xy=(sim_count + dms_count / 2.0, -1.4), xycoords="data",
+                         ha="center", va="bottom", fontsize=12, weight="bold", color="black")
+            ax.plot([sim_count + 0.1, sim_count + dms_count - 0.1], [-1.0, -1.0],
+                     color="black", lw=2.5, clip_on=False)
+
+        ax.set_title(f"{species} Structural Elements: Enrichment Landscape",
+                      fontsize=TITLE_FONTSIZE, pad=60, weight="bold")
+        ax.set_xlabel("")
+        ax.set_ylabel("Element size (nt / bp)", fontsize=LABEL_FONTSIZE)
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
     return Path(out_path)
@@ -87,6 +117,7 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
         sim_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "Sim")]
         exp_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "DMS")]
         cmap = "Reds" if sp == "Human" else "Oranges"
+        sim_drawn = False
         if not sim_sub.empty:
             try:
                 sns.kdeplot(
@@ -94,25 +125,38 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
                     ax=ax, fill=True, cmap=cmap, alpha=0.50,
                     levels=8, thresh=0.05, warn_singular=False,
                 )
+                sim_drawn = True
             except Exception as e:
                 print(f"[features] phase_space: KDE failed for {sp} ({e}); using hexbin.")
                 ax.hexbin(sim_sub["Avg_Macro_Stem"], sim_sub["Avg_Total_Loop"],
                            gridsize=18, cmap=cmap, mincnt=1, alpha=0.6)
+                sim_drawn = True
         color = PALETTE.get(sp, "red")
         if not exp_sub.empty:
             sns.scatterplot(data=exp_sub, x="Avg_Macro_Stem", y="Avg_Total_Loop",
-                            ax=ax, color=color, s=160, edgecolor="black", linewidth=1.4, zorder=5)
+                            ax=ax, color=color, s=160, edgecolor="black", linewidth=1.4, zorder=5,
+                            label="In Organello DMS Transcripts")
             from mtrnafeat.viz.style import repel_labels
             repel_labels(ax,
                           exp_sub["Avg_Macro_Stem"].values, exp_sub["Avg_Total_Loop"].values,
                           exp_sub["Gene"].values, color="black", fontsize=11,
                           use_adjusttext=True)
+        if sim_drawn:
+            from matplotlib.patches import Patch
+            base_color = sns.color_palette(cmap, n_colors=8)[5]
+            handles, labels = ax.get_legend_handles_labels()
+            handles.insert(0, Patch(facecolor=base_color, alpha=0.5, label="Simulated Landscape"))
+            labels.insert(0, "Simulated Landscape")
+            ax.legend(handles, labels, loc="upper right", fontsize=11, framealpha=0.9)
+        elif not exp_sub.empty:
+            ax.legend(loc="upper right", fontsize=11, framealpha=0.9)
         ax.set_xlim(*x_lim)
         ax.set_ylim(*y_lim)
         ax.margins(x=0.10, y=0.12)
-        ax.set_title(f"{sp}: structural phase space", fontsize=TITLE_FONTSIZE, pad=12)
-        ax.set_xlabel("Average macro-helix size (bp)", fontsize=LABEL_FONTSIZE)
-        ax.set_ylabel("Average loop size (nt)", fontsize=LABEL_FONTSIZE)
+        ax.set_title(f"{sp} RNA Stem and Loop Sizes\n(Simulated vs. In Organello DMS)",
+                     fontsize=TITLE_FONTSIZE, pad=12)
+        ax.set_xlabel("Average Helix Size (nt)", fontsize=LABEL_FONTSIZE)
+        ax.set_ylabel("Average Loop Size (nt)", fontsize=LABEL_FONTSIZE)
         style_axis(ax)
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
@@ -124,9 +168,8 @@ def span_boxplot(df_spans: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     fig, ax = plt.subplots(figsize=(10, 6))
     df = df_spans.copy()
     df["Condition"] = df["Type"].astype(str) + " " + df["Species"].astype(str)
-    palette = {f"DMS Human": "#D62728", f"DMS Yeast": "#FF7F0E",
-               f"Sim Human": "#F4A6A2", f"Sim Yeast": "#FFD7A8",
-               f"Sim Sim Human": "#F4A6A2", f"Sim Sim Yeast": "#FFD7A8"}
+    palette = {"DMS Human": "#D62728", "DMS Yeast": "#FF7F0E",
+               "Sim Human": "#F4A6A2", "Sim Yeast": "#FFD7A8"}
     sns.boxplot(data=df, x="Condition", y="Span", ax=ax, hue="Condition",
                 palette=palette, width=0.6, fliersize=3, linewidth=1.4, legend=False)
     ax.set_title("Base-pairing span distribution", fontsize=TITLE_FONTSIZE, pad=12)
