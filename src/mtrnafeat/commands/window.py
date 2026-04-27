@@ -13,7 +13,7 @@ import pandas as pd
 
 from mtrnafeat.analysis import window
 from mtrnafeat.config import Config
-from mtrnafeat.constants import canonical_gene
+from mtrnafeat.constants import canonical_gene, file_safe_gene
 from mtrnafeat.io.annotations import annotation_for
 from mtrnafeat.io.db_parser import list_genes
 from mtrnafeat.io.writers import canonical_csv
@@ -50,17 +50,19 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
         for gene in cfg.target_genes:
             target = canonical_gene(gene)
             if target not in species_genes:
+                print(f"[mtrnafeat] window: skip {species} {target} (not in {fname})", flush=True)
                 continue
             df = window.scan_for_gene(species, path, gene, cfg)
             all_frames.append(df)
             try:
                 annot = annotation_for(species, gene)
             except KeyError:
+                print(f"[mtrnafeat] window: no annotation for {species} {target}; CSV row kept, plot skipped", flush=True)
                 continue
             window_plot.plot_full_transcript(
                 df, annot["l_utr5"], annot["l_cds"], annot["l_tr"],
                 species, target, cfg.max_bp_span,
-                plot_path(out, f"window_{species}_{target}", cfg.plot_format),
+                plot_path(out, f"window_{species}_{file_safe_gene(gene)}", cfg.plot_format),
                 dpi=cfg.dpi,
             )
 

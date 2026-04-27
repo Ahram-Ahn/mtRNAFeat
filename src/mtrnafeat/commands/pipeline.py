@@ -33,6 +33,13 @@ INDEPENDENT = (
     "substitution", "cofold", "gene_panel",
 )
 
+# Per-stage extra args appended after `--` when invoking the subcommand.
+# significance: --per-window unlocks the refined Panel-B-style overlays;
+# without it, the stage emits only z_per_gene.csv.
+STAGE_EXTRAS: dict[str, list[str]] = {
+    "significance": ["--per-window"],
+}
+
 
 def _parse(args: list[str] | None) -> dict:
     parsed = {"parallel": False, "skip": set()}
@@ -47,7 +54,7 @@ def _parse(args: list[str] | None) -> dict:
     return parsed
 
 
-def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, seed: int | None) -> tuple[str, int]:
+def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, seed: int | None) -> tuple[str, int, int]:
     """Subprocess entry — invoked by the parallel pool."""
     cmd = [sys.executable, "-m", "mtrnafeat.cli", name.replace("_", "-"),
            "--outdir", outdir]
@@ -55,21 +62,36 @@ def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, 
         cmd += ["--config", config_path]
     if seed is not None:
         cmd += ["--seed", str(seed)]
+    extras = STAGE_EXTRAS.get(name)
+    if extras:
+        cmd += ["--", *extras]
     started = time.time()
     proc = subprocess.run(cmd, capture_output=False)
-    return name, int(time.time() - started)
+    return name, int(time.time() - started), int(proc.returncode)
 
 
 def _sequential(cfg: Config, skip: set[str]) -> None:
     print(f"[mtrnafeat] running pipeline (sequential) → {cfg.outdir}")
+    failures: list[tuple[str, str]] = []
     for name in INDEPENDENT:
         if name in skip:
             print(f"  - {name}: SKIPPED")
             continue
         print(f"  → {name}")
         mod = importlib.import_module(f"mtrnafeat.commands.{name}")
-        mod.run(cfg, [])
-    print("[mtrnafeat] pipeline complete.")
+        try:
+            rc = int(mod.run(cfg, list(STAGE_EXTRAS.get(name, []))) or 0)
+        except Exception as exc:
+            failures.append((name, f"exception: {exc!r}"))
+            print(f"  ✗ {name} RAISED: {exc!r}")
+            continue
+        if rc != 0:
+            failures.append((name, f"exit {rc}"))
+            print(f"  ✗ {name} FAILED (exit {rc})")
+    if failures:
+        print(f"[mtrnafeat] pipeline complete WITH FAILURES: " + ", ".join(f"{n} ({why})" for n, why in failures))
+    else:
+        print("[mtrnafeat] pipeline complete.")
 
 
 def _parallel(cfg: Config, skip: set[str], config_path: str | None) -> None:
@@ -80,6 +102,7 @@ def _parallel(cfg: Config, skip: set[str], config_path: str | None) -> None:
 
     independent_to_run = [n for n in INDEPENDENT if n not in skip]
     finished: dict[str, int] = {}
+    failures: list[tuple[str, int]] = []
     started = time.time()
 
     with ProcessPoolExecutor(max_workers=n_indep) as ex:
@@ -88,14 +111,20 @@ def _parallel(cfg: Config, skip: set[str], config_path: str | None) -> None:
             for name in independent_to_run
         }
         for fut in as_completed(futures):
-            name, elapsed = fut.result()
+            name, elapsed, rc = fut.result()
             finished[name] = elapsed
             wall = int(time.time() - started)
-            print(f"[mtrnafeat]   ✓ {name} done in {elapsed}s (wall {wall}s)")
+            if rc == 0:
+                print(f"[mtrnafeat]   ✓ {name} done in {elapsed}s (wall {wall}s)")
+            else:
+                failures.append((name, rc))
+                print(f"[mtrnafeat]   ✗ {name} FAILED (exit {rc}) after {elapsed}s (wall {wall}s)")
 
     total = int(time.time() - started)
     print(f"[mtrnafeat] pipeline complete — wall {total}s")
     print(f"[mtrnafeat] per-stage time: " + ", ".join(f"{k}={v}s" for k, v in finished.items()))
+    if failures:
+        print(f"[mtrnafeat] FAILURES: " + ", ".join(f"{n} (exit {rc})" for n, rc in failures))
 
 
 def run(cfg: Config, args: list[str] | None = None) -> int:

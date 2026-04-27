@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from mtrnafeat.analysis import kinetic
 from mtrnafeat.config import Config
+from mtrnafeat.constants import file_safe_gene
 from mtrnafeat.io.writers import canonical_csv
 from mtrnafeat.viz import kinetic_plot
 from mtrnafeat.viz.style import plot_path
@@ -25,5 +26,5 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     canonical_csv(traj, out / "kinetic_trajectory.csv")
     for (gene, species), _ in traj.groupby(["Gene", "Species"]):
         kinetic_plot.plot_kinetic_trajectory(traj, gene, species,
-                                              plot_path(out, f"kinetic_{species}_{gene}", cfg.plot_format), dpi=cfg.dpi)
+                                              plot_path(out, f"kinetic_{species}_{file_safe_gene(gene)}", cfg.plot_format), dpi=cfg.dpi)
     return 0

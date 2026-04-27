@@ -60,3 +60,8 @@ def db_gene(name: str) -> str:
     canon = canonical_gene(name)
     inverse = {"ATP8/ATP6": "ATP86", "ND4L/ND4": "ND4L4"}
     return inverse.get(canon, canon)
+
+
+def file_safe_gene(name: str) -> str:
+    """Canonical gene name with path separators replaced for safe filenames."""
+    return canonical_gene(name).replace("/", "_")
