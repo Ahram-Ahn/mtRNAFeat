@@ -15,6 +15,7 @@ SUBCOMMANDS = {
     "landscape": "mtrnafeat.commands.landscape",
     "kinetic": "mtrnafeat.commands.kinetic",
     "window": "mtrnafeat.commands.window",
+    "local-probability": "mtrnafeat.commands.local_probability",
     "features": "mtrnafeat.commands.features",
     "significance": "mtrnafeat.commands.significance",
     "compare": "mtrnafeat.commands.compare",
