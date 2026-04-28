@@ -27,7 +27,8 @@ from mtrnafeat.config import Config
 
 INDEPENDENT = (
     "stats", "landscape", "features",
-    "window", "significance", "tis", "compare",
+    "window", "local_probability",
+    "significance", "tis", "compare",
     "substitution", "cofold", "gene_panel",
 )
 

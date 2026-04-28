@@ -1,15 +1,17 @@
-"""Dinucleotide-shuffle z-score per gene and per sliding window.
+"""Dinucleotide-shuffle z-score per gene.
 
 Workman & Krogh 1999 framework: a sequence's MFE is "significantly stable" if
 it is more negative than the MFE of dinucleotide-shuffled controls. Same
 dinucleotide composition isolates structural signal from compositional bias.
+
+The per-window equivalent now lives in ``analysis.cotrans`` (richer signals,
+per-gene plots).
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from mtrnafeat.analysis.window import sliding_intervals
 from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
@@ -68,30 +70,7 @@ def per_gene_significance(cfg: Config) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def per_window_significance(cfg: Config) -> pd.DataFrame:
-    """Sliding-window z-score: ScanFold-style per-window null."""
-    rng = make_rng(cfg.seed + 8)
-    step(f"running significance per window (n_shuffles={cfg.n_shuffles})")
-    rows = []
-    by_species: dict[str, list] = {}
-    for species, rec in _records_for_targets(cfg):
-        by_species.setdefault(species, []).append(rec)
-    for species, recs in by_species.items():
-        for rec in progress(recs, desc=f"{species} per-window", unit="gene"):
-            n = len(rec.sequence)
-            intervals = sliding_intervals(n, cfg.window_nt, cfg.step_nt)
-            for s, e in progress(intervals, desc=f"{species} {rec.gene} windows",
-                                  unit="win", leave=False):
-                seq_w = rec.sequence[s:e]
-                if len(seq_w) < 30:
-                    continue
-                res = gene_zscore(seq_w, cfg.n_shuffles, rng)
-                rows.append({
-                    "Species": species,
-                    "Gene": canonical_gene(rec.gene),
-                    "Window_Start_1based": s + 1,
-                    "Window_End_1based": e,
-                    "Window_Center_1based": s + 1 + (len(seq_w) - 1) / 2.0,
-                    **res,
-                })
-    return pd.DataFrame(rows)
+# Per-window dinuc-shuffle z-scoring used to live here. It's been retired
+# in favour of `analysis.cotrans` — same goal (find structurally interesting
+# positions across each transcript) but with richer Vienna-derived signals
+# (ensemble diversity, paired fraction, MFE/nt) and per-gene plots.

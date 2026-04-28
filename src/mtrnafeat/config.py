@@ -52,6 +52,12 @@ class Config:
     # `window` command: whole-transcript fold-and-compare with a rolling-mean
     # smooth on the per-position paired vector.
     rolling_window: int = 25
+    # `local-probability` command: ViennaRNA RNAplfold defaults. window = local
+    # window size; max_bp_span = hard distance cap; cutoff = min pair-prob to
+    # report. Same defaults as RNAplfold's own ``-W 80 -L 50 -c 0.001``.
+    rnaplfold_window: int = 80
+    rnaplfold_max_bp_span: int = 50
+    rnaplfold_cutoff: float = 0.001
     # window_nt / step_nt are kept for `significance` and `cofold` which still
     # do a sliding-window scan over each transcript.
     window_nt: int = 120
