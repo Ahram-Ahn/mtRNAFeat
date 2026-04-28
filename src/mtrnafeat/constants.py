@@ -32,6 +32,8 @@ PALETTE = {
     "DMS": "#1F77B4",        # blue
     "Vienna": "#D62728",
     "Vienna_span": "#2CA02C",
+    "RNAstructure": "#8C564B",   # brown — distinct from the Human/Vienna red
+
     "Diversity": "#000000",
     "Cotrans": "#9467BD",
     "Difference": "#7F7F7F",

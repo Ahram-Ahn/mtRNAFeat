@@ -42,13 +42,24 @@ def gene_zscore(seq: str, n_shuffles: int, rng: np.random.Generator,
     }
 
 
+def _records_for_targets(cfg: Config) -> list[tuple[str, "object"]]:
+    """Yield (species, DbRecord) for every record whose canonical gene name
+    is in ``cfg.target_genes``. If ``target_genes`` is empty/None, fall back
+    to every record in every .db file."""
+    targets = {canonical_gene(g) for g in (cfg.target_genes or ())}
+    out: list[tuple[str, object]] = []
+    for species, fname in cfg.db_files.items():
+        for rec in parse_db(cfg.data_dir / fname):
+            if not targets or canonical_gene(rec.gene) in targets:
+                out.append((species, rec))
+    return out
+
+
 def per_gene_significance(cfg: Config) -> pd.DataFrame:
     rng = make_rng(cfg.seed + 7)
     step(f"running significance per gene (n_shuffles={cfg.n_shuffles})")
     rows = []
-    all_recs = [(species, rec)
-                for species, fname in cfg.db_files.items()
-                for rec in parse_db(cfg.data_dir / fname)]
+    all_recs = _records_for_targets(cfg)
     for species, rec in progress(all_recs, desc="significance (genes)", unit="gene"):
         res = gene_zscore(rec.sequence, cfg.n_shuffles, rng,
                            label=f"{species} {rec.gene}")
@@ -62,10 +73,11 @@ def per_window_significance(cfg: Config) -> pd.DataFrame:
     rng = make_rng(cfg.seed + 8)
     step(f"running significance per window (n_shuffles={cfg.n_shuffles})")
     rows = []
-    for species, fname in cfg.db_files.items():
-        path = cfg.data_dir / fname
-        for rec in progress(list(parse_db(path)),
-                              desc=f"{species} per-window", unit="gene"):
+    by_species: dict[str, list] = {}
+    for species, rec in _records_for_targets(cfg):
+        by_species.setdefault(species, []).append(rec)
+    for species, recs in by_species.items():
+        for rec in progress(recs, desc=f"{species} per-window", unit="gene"):
             n = len(rec.sequence)
             intervals = sliding_intervals(n, cfg.window_nt, cfg.step_nt)
             for s, e in progress(intervals, desc=f"{species} {rec.gene} windows",

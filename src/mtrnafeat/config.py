@@ -49,7 +49,11 @@ class Config:
         "VAR1",
     )
 
-    # Window scan
+    # `window` command: whole-transcript fold-and-compare with a rolling-mean
+    # smooth on the per-position paired vector.
+    rolling_window: int = 25
+    # window_nt / step_nt are kept for `significance` and `cofold` which still
+    # do a sliding-window scan over each transcript.
     window_nt: int = 120
     step_nt: int = 10
     # Single canonical max_bp_span. The previous sweep across (50,100,150,300,inf)
@@ -68,7 +72,12 @@ class Config:
     cofold_tau: float = 640.0
     cofold_alpha_sweep: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
     cofold_tau_sweep: tuple[float, ...] = (160.0, 320.0, 640.0, 1280.0, 2560.0)
-    fold_engine: str = "vienna"   # "vienna" (default) — CoFold is a separate stage
+    # Per-window folder used by the `window` command. The .db ground-truth
+    # dot-brackets were produced upstream with RNAstructure (Moran et al.,
+    # `Fold -md 350`), so RNAstructure is the canonical match. ViennaRNA is
+    # available via `--engine vienna` for the legacy path. Other commands
+    # (stats, landscape, kinetic, …) still use ViennaRNA via core.thermo.
+    fold_engine: str = "rnastructure"   # "rnastructure" (default) | "vienna"
 
     # Features
     max_loop_artifact_size: int = 50

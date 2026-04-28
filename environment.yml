@@ -1,0 +1,36 @@
+# Reproducible conda env for mtrnafeat.
+#
+# Create:
+#     conda env create -f environment.yml
+#     conda activate mtrnafeat
+#     pip install -e .
+#
+# Update an existing env after editing this file:
+#     conda env update -f environment.yml --prune
+#
+# RNAstructure note: bioconda's rnastructure package ships an activation
+# script that sets DATAPATH to $CONDA_PREFIX/share/rnastructure/data_tables
+# automatically on `conda activate`. No manual DATAPATH export needed.
+name: mtrnafeat
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  # Folding engines
+  - bioconda::viennarna=2.7.2
+  - bioconda::rnastructure=6.6
+  # Scientific Python
+  - numpy>=1.26
+  - pandas>=2.1
+  - scipy>=1.11
+  - matplotlib>=3.8
+  - seaborn>=0.13
+  - pyyaml>=6.0
+  - biopython>=1.83
+  - tqdm>=4.66
+  # Dev / test
+  - pytest>=7.4
+  - pytest-cov
+  - ruff>=0.5
+  - pip

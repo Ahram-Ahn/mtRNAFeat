@@ -131,9 +131,13 @@ cofold_tau: 640.0      # decay constant (nt) — ≈ 50 nt/s × 12.8 s window
 cofold_alpha_sweep: [0.0, 0.25, 0.5, 0.75, 1.0]
 cofold_tau_sweep:   [160.0, 320.0, 640.0, 1280.0, 2560.0]
 
-# Folding engine selector. "vienna" is the only supported value today;
-# the dedicated `cofold` stage exercises CoFold itself separately.
-fold_engine: vienna
+# Folding engine selector for the `window` command.
+#   "rnastructure" (default) — `Fold -md <max_bp_span>`, matches how the
+#                              .db ground-truth dot-brackets were produced.
+#   "vienna"                  — `RNA.fold_compound` with `md.max_bp_span`.
+# All other commands (significance, cofold, kinetic, ...) still use Vienna
+# via core.thermo. Override per run with `-- --engine vienna|rnastructure`.
+fold_engine: rnastructure
 
 # ────────────────────────── Features ──────────────────────────
 # Loop sizes above this threshold (nt) are treated as folding artifacts
