@@ -3,8 +3,9 @@
 Per (species, gene) panel: KDE of three null pools, with two vertical
 lines for the wild-type:
   - solid black  : Vienna MFE of the WT sequence (apples-to-apples vs pool)
-  - dashed red   : energy of the experimental DMS structure under the same
-                   thermo model (the realized in-vivo ΔG)
+  - dashed red   : Vienna `eval_structure` of the experimental DMS
+                   dot-bracket (read from the .db's structure line, NOT
+                   the .db header MFE) on the same chunk length
 
 Per-species figures so human / yeast aren't crammed into one grid.
 """
@@ -60,14 +61,15 @@ def _kde_for_species(species_dist: pd.DataFrame, species: str,
                        label=f"WT Vienna MFE = {wt_mfe:.1f}")
         if wt_dms is not None and np.isfinite(wt_dms):
             ax.axvline(wt_dms, color="#D62728", linestyle="--", linewidth=1.8,
-                       label=f"WT DMS-eval ΔG = {wt_dms:.1f}")
+                       label=f"DMS structure, Vienna ΔG = {wt_dms:.1f}")
         ax.set_title(gene, fontsize=TITLE_FONTSIZE - 3)
         ax.set_xlabel(r"$\Delta$G (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
         ax.set_ylabel("density", fontsize=LABEL_FONTSIZE - 2)
         style_axis(ax)
         ax.legend(fontsize=8, loc="best")
-    fig.suptitle(f"{species} — substitution-thermodynamic permutation test (Vienna MFE)",
-                 fontsize=TITLE_FONTSIZE - 1, y=1.005)
+    fig.suptitle(f"{species} — substitution-thermodynamic permutation test (Vienna MFE)\n"
+                 "DMS ΔG = Vienna eval_structure on the .db dot-bracket (header MFE not used)",
+                 fontsize=TITLE_FONTSIZE - 2, y=1.01)
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)

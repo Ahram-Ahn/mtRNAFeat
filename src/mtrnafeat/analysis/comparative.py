@@ -1,20 +1,17 @@
 """Yeast↔human COX1 codon-aligned comparative analysis.
 
 Reads the PAL2NAL alignment, classifies every column as identical /
-synonymous / non-synonymous, locates substitutions by codon position
-(1st / 2nd / wobble), and projects local Vienna ΔG difference onto the
-codon frame.
+synonymous / non-synonymous, and locates substitutions by codon position
+(1st / 2nd / wobble). The downstream tally feeds the substitution
+heatmap and directional-flux outputs of the `compare` stage.
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from mtrnafeat.config import Config
-from mtrnafeat.core import thermo
 from mtrnafeat.io.alignment import codon_position_changes, parse_pal2nal
 from mtrnafeat.io.codons import HUMAN_MT_CODON_TABLE, YEAST_MT_CODON_TABLE
-from mtrnafeat.io.db_parser import get_record
 
 
 def classify_column(codon_y: str, codon_h: str) -> dict:
@@ -66,58 +63,6 @@ def substitution_summary(table: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
     return df.groupby(["Position", "Yeast_Base", "Human_Base", "Same_AA"]).size().reset_index(name="Count")
-
-
-def cox1_local_dG_track(cfg: Config, window: int = 60) -> pd.DataFrame:
-    """For each codon column, compute Vienna local ΔG over a +/- window/2-nt
-    span around the column's nucleotide position in each species. Also
-    reports the difference (yeast − human)."""
-    table = alignment_table(cfg)
-    rec_y = get_record(cfg.data_dir / cfg.db_files["Yeast"], "COX1")
-    rec_h = get_record(cfg.data_dir / cfg.db_files["Human"], "COX1")
-
-    annot_y = _cox1_offsets(cfg, "Yeast")
-    annot_h = _cox1_offsets(cfg, "Human")
-
-    seq_y = rec_y.sequence
-    seq_h = rec_h.sequence
-
-    pos_y = annot_y  # 0-based offset into yeast COX1 sequence at start of CDS
-    pos_h = annot_h
-    half = window // 2
-    rows = []
-    for _, r in table.iterrows():
-        col = int(r["col"])
-        if r["is_gap"]:
-            rows.append({"col": col, "yeast_dG": np.nan, "human_dG": np.nan, "delta_dG_yeast_minus_human": np.nan})
-            continue
-        ny = pos_y + (col - 1) * 3
-        nh = pos_h + (col - 1) * 3
-        yseg = _safe_slice(seq_y, ny - half, ny + half)
-        hseg = _safe_slice(seq_h, nh - half, nh + half)
-        try:
-            _, dg_y = thermo.fold_mfe(yseg) if yseg else (None, np.nan)
-        except Exception:
-            dg_y = np.nan
-        try:
-            _, dg_h = thermo.fold_mfe(hseg) if hseg else (None, np.nan)
-        except Exception:
-            dg_h = np.nan
-        rows.append({"col": col, "yeast_dG": dg_y, "human_dG": dg_h,
-                       "delta_dG_yeast_minus_human": dg_y - dg_h if (yseg and hseg) else np.nan})
-    return pd.DataFrame(rows)
-
-
-def _safe_slice(seq: str, start: int, end: int) -> str:
-    if start < 0 or end > len(seq) or end <= start:
-        return ""
-    return seq[start:end]
-
-
-def _cox1_offsets(cfg: Config, species: str) -> int:
-    from mtrnafeat.io.annotations import annotation_for
-    annot = annotation_for(species, "COX1")
-    return int(annot["l_utr5"])
 
 
 # --- Directional substitution flux (was legacy/base_substitution/02.*) ---

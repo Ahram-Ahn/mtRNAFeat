@@ -3,6 +3,12 @@
 Skips gracefully if the prerequisites are missing (alignment file or COX1
 record in either species), so the pipeline keeps moving on test fixtures
 that don't include COX1.
+
+Note: the per-codon local-ΔG track was dropped from the published output
+(both the per-species traces and the underlying CSV). Local ΔG along the
+transcript is already covered by the `window` stage at higher resolution
+and with both engines (Vienna full + max-bp-span), so a duplicate panel
+in `compare/` was visually noisy without adding signal.
 """
 from __future__ import annotations
 
@@ -31,15 +37,12 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
 
     table = comparative.alignment_table(cfg)
     summary = comparative.substitution_summary(table)
-    track = comparative.cox1_local_dG_track(cfg)
     flux = comparative.directional_flux_table(cfg)
     titv = comparative.transition_transversion_summary(table)
 
     canonical_csv(table, out / "cox1_alignment_table.csv")
     canonical_csv(summary, out / "cox1_substitution_summary.csv")
-    canonical_csv(track, out / "cox1_local_dG_track.csv")
     tables_csv(summary, cfg.outdir, "cox1_substitution_summary")
-    tables_csv(track, cfg.outdir, "cox1_local_dG_track")
     if not flux.empty:
         canonical_csv(flux, out / "cox1_directional_flux.csv")
         tables_csv(flux, cfg.outdir, "cox1_directional_flux")
@@ -50,12 +53,6 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
         canonical_csv(titv, out / "cox1_transition_transversion.csv")
         tables_csv(titv, cfg.outdir, "cox1_transition_transversion")
 
-    comparative_plot.plot_dG_track_species(
-        track, "Yeast", plot_path(out, "cox1_dG_track_yeast", cfg.plot_format), dpi=cfg.dpi,
-    )
-    comparative_plot.plot_dG_track_species(
-        track, "Human", plot_path(out, "cox1_dG_track_human", cfg.plot_format), dpi=cfg.dpi,
-    )
     comparative_plot.plot_substitution_summary(
         summary, plot_path(out, "cox1_substitution_heatmap", cfg.plot_format), dpi=cfg.dpi,
     )

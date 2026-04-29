@@ -7,13 +7,34 @@ sequences from each of three null pools, folds every variant under plain
 Vienna MFE (with cfg.max_bp_span as the only constraint), and asks: is the
 wild-type ΔG significantly lower (more stable) than each null pool?
 
-Two reference values are reported per (species, gene):
-  - WT_MFE_kcal       : Vienna MFE of the wild-type sequence (apples-to-apples
-                         vs the pool which is also Vienna MFE).
-  - WT_DMS_Eval_kcal  : energy of the experimental DMS structure under the
-                         same Vienna model (asks 'is the actual realized
-                         in-vivo structure more / less stable than what
-                         synonymous shuffling can MFE-fold?').
+**ΔG provenance (this stage NEVER uses the `.db` header MFE value).**
+Both reference ΔGs are recomputed from scratch by ViennaRNA on the
+sequences/structures in the `.db` records:
+
+  - `WT_MFE`              : ΔG of the wild-type sequence as folded by
+                              Vienna MFE (`thermo.fold_mfe`). Apples-to-
+                              apples versus the null pools, which are
+                              also folded with `thermo.fold_mfe`.
+  - `WT_DMS_Eval`         : ΔG of the experimental DMS dot-bracket
+                              (read from the `.db` file's structure line)
+                              evaluated under Vienna's NN energy model
+                              via `thermo.eval_structure`. Asks "is the
+                              actual realized in-vivo structure more /
+                              less stable than what synonymous shuffling
+                              can MFE-fold?"
+  - `DMS_FullLen_Vienna`  : same as `WT_DMS_Eval` but for the FULL
+                              transcript-length DMS structure (no codon
+                              truncation), reported once per gene as a
+                              sanity check that the chunk-truncated
+                              value tracks the full-length one. This
+                              column is `NaN` when the gene has no DMS
+                              structure recorded.
+
+The `.db` header (e.g. `>COX1: -150.4 kcal/mol`) is parsed only by
+`io/db_parser.py` and consumed only by reporting stages (`stats`,
+`landscape`); it is intentionally bypassed here so substitution ΔGs are
+fully reproducible from the dot-bracket structure plus Vienna.
+
 The summary table reports Z-scores and empirical p-values for both refs.
 
 Three nulls:
@@ -57,6 +78,8 @@ class _PrefixJob:
     gene: str
     seq_dna: str
     dms_structure: str
+    full_seq_dna: str
+    full_dms_structure: str
     n_simulations: int
     max_bp_span: int
     seed: int
@@ -186,9 +209,14 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
     n_codons = len(seq_dna) // 3
     length = len(seq_dna)
 
-    # Two wild-type references:
-    #   wt_mfe = Vienna MFE of WT sequence (apples-to-apples vs the pool)
-    #   wt_dms = energy of the experimental DMS structure under the same model
+    # Wild-type ΔG references — both recomputed by ViennaRNA on the .db's
+    # sequence/structure (the .db header MFE is intentionally NOT used):
+    #   wt_mfe           : Vienna MFE of WT sequence (apples-to-apples vs pool)
+    #   wt_dms           : Vienna eval of the .db dot-bracket TRUNCATED to
+    #                      the chunk length being permuted
+    #   wt_dms_fulllen   : Vienna eval of the .db dot-bracket at the FULL
+    #                      transcript length (sanity check vs. wt_dms; not
+    #                      compared to the pool)
     rna_wt = _rna(seq_dna)
     _, wt_mfe = thermo.fold_mfe(rna_wt, max_bp_span=job.max_bp_span)
     wt_dms = float("nan")
@@ -199,6 +227,15 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
                 wt_dms = thermo.eval_structure(rna_wt, dms_pref, max_bp_span=job.max_bp_span)
             except Exception:
                 wt_dms = float("nan")
+    wt_dms_fulllen = float("nan")
+    if job.full_dms_structure and job.full_seq_dna:
+        try:
+            wt_dms_fulllen = thermo.eval_structure(
+                _rna(job.full_seq_dna), job.full_dms_structure,
+                max_bp_span=job.max_bp_span,
+            )
+        except Exception:
+            wt_dms_fulllen = float("nan")
 
     pools = {
         "flat_gc": [_flat_gc(length, overall_gc, rng) for _ in range(job.n_simulations)],
@@ -224,6 +261,14 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
             "MFE_kcal_per_mol": float(wt_dms),
             "Length_nt": length,
         },
+        {
+            "Species": job.species,
+            "Gene": canonical_gene(job.gene),
+            "Pool": "WildType_DMS_Eval_FullLength",
+            "Simulation": 0,
+            "MFE_kcal_per_mol": float(wt_dms_fulllen),
+            "Length_nt": len(job.full_seq_dna),
+        },
     ]
     for pool_name, seqs in pools.items():
         for i, s in enumerate(seqs, start=1):
@@ -244,10 +289,12 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
     for (species, gene), g in dist.groupby(["Species", "Gene"]):
         wt_mfe_row = g[g["Pool"] == "WildType_MFE"]["MFE_kcal_per_mol"]
         wt_dms_row = g[g["Pool"] == "WildType_DMS_Eval"]["MFE_kcal_per_mol"]
+        wt_dms_full_row = g[g["Pool"] == "WildType_DMS_Eval_FullLength"]["MFE_kcal_per_mol"]
         if wt_mfe_row.empty:
             continue
         wt_mfe = float(wt_mfe_row.iloc[0])
         wt_dms = float(wt_dms_row.iloc[0]) if not wt_dms_row.empty else float("nan")
+        wt_dms_full = float(wt_dms_full_row.iloc[0]) if not wt_dms_full_row.empty else float("nan")
         for pool in ("flat_gc", "positional_gc", "synonymous"):
             pool_vals = g[g["Pool"] == pool]["MFE_kcal_per_mol"].values.astype(float)
             if len(pool_vals) == 0:
@@ -269,9 +316,10 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
                 "Species": species,
                 "Gene": gene,
                 "Pool": pool,
-                "Length_nt": int(g["Length_nt"].iloc[0]),
+                "Length_nt": int(g[g["Pool"] == "WildType_MFE"]["Length_nt"].iloc[0]),
                 "WT_MFE": wt_mfe,
                 "WT_DMS_Eval": wt_dms,
+                "WT_DMS_Eval_FullLength": wt_dms_full,
                 "Pool_Mean_MFE": mean,
                 "Pool_SD_MFE": sd,
                 "Z_WT_MFE_vs_Pool": z_mfe,
@@ -279,6 +327,7 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
                 "Z_WT_DMS_vs_Pool": z_dms,
                 "Empirical_p_WT_DMS_more_stable": p_dms,
                 "N_Simulations": n,
+                "DMS_dG_Source": "Vienna eval_structure on .db dot-bracket",
             })
     return pd.DataFrame(rows)
 
@@ -298,9 +347,13 @@ def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
             seq = _truncate_codon_aligned(rec.sequence, max_nt=cfg.substitution_max_nt)
             if len(seq) < 60:
                 continue
+            full_seq = _dna(rec.sequence)
+            full_struct = rec.structure or ""
             jobs.append(_PrefixJob(
                 species=species, gene=target, seq_dna=seq,
                 dms_structure=rec.structure or "",
+                full_seq_dna=full_seq,
+                full_dms_structure=full_struct,
                 n_simulations=int(cfg.substitution_n_simulations),
                 max_bp_span=int(cfg.max_bp_span),
                 seed=rng_seed_base + 1000 * gi + hash(species) % 997,

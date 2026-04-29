@@ -1,4 +1,4 @@
-"""Yeast↔human COX1 comparative plots: substitution map + ΔG-difference track."""
+"""Yeast↔human COX1 comparative plots: substitution heatmap + directional flux."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,36 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
-
-
-def plot_dG_track_species(track_df, species: str, out_path: Path, dpi: int = 300) -> Path:
-    """Single-species COX1 local-ΔG track (no cross-species comparison)."""
-    apply_theme()
-    col = "yeast_dG" if species.lower().startswith("yeast") else "human_dG"
-    color = "#FF7F0E" if col == "yeast_dG" else "#D62728"
-    df = track_df.dropna(subset=[col])
-    fig, ax = plt.subplots(figsize=(15, 4.6))
-    ax.plot(df["col"], df[col], color=color, lw=1.6)
-    ax.axhline(0, color="gray", linestyle="--", linewidth=0.7)
-    ax.set_xlabel("Codon column (PAL2NAL alignment)", fontsize=LABEL_FONTSIZE)
-    ax.set_ylabel(f"{species} COX1 local ΔG (kcal/mol)", color=color, fontsize=LABEL_FONTSIZE)
-    ax.set_title(f"{species} COX1 — local ΔG along the alignment",
-                 fontsize=TITLE_FONTSIZE - 2, pad=10)
-    style_axis(ax)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=dpi)
-    plt.close(fig)
-    return Path(out_path)
-
-
-# Backward-compat alias: the old combined-track function now defaults to
-# emitting only the human panel (the comparative-difference panel was
-# explicitly requested removed).
-
-def plot_dG_track(track_df, out_path: Path, dpi: int = 300) -> Path:
-    """Deprecated: emit per-species figures via plot_dG_track_species instead."""
-    return plot_dG_track_species(track_df, "Human", out_path, dpi=dpi)
+from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme
 
 
 def plot_directional_flux(flux_df, out_path: Path, dpi: int = 300) -> Path:

@@ -163,18 +163,76 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
 
 
 def span_boxplot(df_spans: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path:
+    """Per-species ECDF of base-pairing distance, on log-x.
+
+    A boxplot collapses a heavy-tailed distribution (which pairing distance
+    always is — a small mode of stem-loops at d ≲ 30 nt plus a long tail of
+    long-range contacts) into a single quartile box that hides exactly the
+    parts that distinguish Sim from DMS. The ECDF plotted on log-x shows
+    the full distribution: where the curves separate is where the two
+    sources actually disagree, the median can be read off the y = 0.5 line,
+    and the tail behavior (P{distance > X}) is visible directly.
+
+    Layout: one panel per species, each panel overlays the Sim and DMS
+    ECDFs with the same color hue but different line styles. Median lines
+    are dropped from each ECDF onto the x-axis so the central tendency is
+    legible without obscuring the curves.
+    """
     apply_theme()
-    fig, ax = plt.subplots(figsize=(10, 6))
     df = df_spans.copy()
-    df["Condition"] = df["Type"].astype(str) + " " + df["Species"].astype(str)
-    palette = {"DMS Human": "#D62728", "DMS Yeast": "#FF7F0E",
-               "Sim Human": "#F4A6A2", "Sim Yeast": "#FFD7A8"}
-    sns.boxplot(data=df, x="Condition", y="Span", ax=ax, hue="Condition",
-                palette=palette, width=0.6, fliersize=3, linewidth=1.4, legend=False)
-    ax.set_title("Base-pairing span distribution", fontsize=TITLE_FONTSIZE, pad=12)
-    ax.set_xlabel("Source / organism", fontsize=LABEL_FONTSIZE)
-    ax.set_ylabel("Pairing distance (nt)", fontsize=LABEL_FONTSIZE)
-    style_axis(ax)
+    df = df[df["Span"].astype(float) > 0]  # log-x guard
+    species_order = [s for s in ("Human", "Yeast") if s in df["Species"].unique()]
+    if not species_order:
+        species_order = sorted(df["Species"].unique())
+    n_sp = len(species_order)
+
+    fig, axes = plt.subplots(1, n_sp, figsize=(7.0 * n_sp, 5.6),
+                              sharey=True)
+    if n_sp == 1:
+        axes = [axes]
+
+    species_color = {"Human": "#D62728", "Yeast": "#FF7F0E"}
+    type_style = {"DMS": {"linestyle": "-", "lw": 2.4, "alpha": 0.95},
+                  "Sim": {"linestyle": "--", "lw": 2.0, "alpha": 0.85}}
+
+    x_max = float(df["Span"].max())
+
+    for ax, sp in zip(axes, species_order):
+        sp_df = df[df["Species"] == sp]
+        base_color = species_color.get(sp, "#444444")
+        for src in ("Sim", "DMS"):
+            vals = np.sort(sp_df[sp_df["Type"] == src]["Span"].astype(float).values)
+            if vals.size == 0:
+                continue
+            y = np.arange(1, vals.size + 1) / vals.size
+            style = type_style[src]
+            ax.step(vals, y, where="post", color=base_color,
+                     label=f"{src} (n={vals.size:,}, median={int(np.median(vals))} nt)",
+                     **style)
+            median = float(np.median(vals))
+            ax.plot([median, median], [0, 0.5], color=base_color,
+                     linestyle=style["linestyle"], lw=0.9, alpha=0.55)
+            ax.plot([1, median], [0.5, 0.5], color=base_color,
+                     linestyle=style["linestyle"], lw=0.9, alpha=0.55)
+
+        ax.set_xscale("log")
+        ax.set_xlim(1, x_max * 1.05)
+        ax.set_ylim(0, 1.02)
+        ax.set_xlabel("Base-pairing distance, |i − j| (nt, log scale)",
+                       fontsize=LABEL_FONTSIZE)
+        if ax is axes[0]:
+            ax.set_ylabel("Cumulative fraction of pairs (ECDF)",
+                           fontsize=LABEL_FONTSIZE)
+        ax.set_title(f"{sp}", fontsize=TITLE_FONTSIZE, pad=10)
+        ax.grid(True, which="both", linestyle=":", linewidth=0.5, alpha=0.4)
+        ax.set_axisbelow(True)
+        ax.legend(loc="lower right", fontsize=10, framealpha=0.92,
+                   title="Source", title_fontsize=10)
+        style_axis(ax)
+
+    fig.suptitle("Base-pairing distance distribution — Sim vs DMS-probed",
+                 fontsize=TITLE_FONTSIZE, y=1.01, fontweight="bold")
+    fig.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
     return Path(out_path)

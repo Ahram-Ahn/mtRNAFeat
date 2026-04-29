@@ -182,23 +182,46 @@ value for that run only.
 
 ## CoFold
 
-The CoFold soft long-range penalty (Proctor & Meyer, *NAR* 2013) augments
-the ViennaRNA energy model with `f(d) = alpha * (1 - exp(-d / tau))`, in
-kcal/mol, applied to every candidate base pair of span `d`. The
-[`cofold`](STAGES.md#cofold) parameter-sweep stage exercises this directly;
-other stages (`window`, `tis`, `substitution`) use plain Vienna unless
-explicitly invoked otherwise.
+The CoFold soft long-range penalty (Proctor & Meyer, *NAR* 2013,
+[doi:10.1093/nar/gkt600](https://academic.oup.com/nar/article/41/19/9090/2411166))
+augments the ViennaRNA energy model with `f(d) = alpha * (1 - exp(-d / tau))`,
+in kcal/mol, applied to every candidate base pair of sequence-distance `d`.
+The penalty is monotonically increasing in `d`, so long-range contacts
+pay more than short-range ones — the kinetic intuition being that bases
+transcribed far apart in time have less chance to find each other before
+downstream sequence appears.
+
+**The two parameters control the penalty's shape:**
+
+- **α** (`alpha`, kcal/mol) is the *asymptotic* penalty as `d → ∞`. Larger
+  α more strongly discourages long-range pairs; α = 0 collapses CoFold to
+  plain Vienna MFE.
+- **τ** (`tau`, nt) is the *decay constant*. The penalty reaches
+  `α · (1 − 1/e) ≈ 0.63 · α` at distance `d = τ`. Small τ makes even
+  short loops costly; large τ keeps short pairing free and only penalizes
+  truly long-range contacts.
+
+CoFold's published defaults (α = 0.5, τ = 640) correspond to a
+transcription speed of ~50 nt/s and a ~12.8 s pairing window.
+
+The [`cofold`](STAGES.md#cofold) parameter-sweep stage exercises the
+(α, τ) grid directly; other stages (`window`, `tis`, `substitution`) use
+plain Vienna unless explicitly invoked otherwise.
 
 ### `cofold_alpha`
 - **Type**: float · **Default**: `0.5`
-- **Controls**: penalty strength (kcal/mol) for single-point CoFold calls.
+- **Controls**: penalty strength α (kcal/mol) — the asymptotic CoFold
+  long-range penalty applied to every candidate base pair. Larger α →
+  stronger discrimination against long-range pairs (α = 0 → plain
+  Vienna).
 - **When to change**: rarely directly; the [`cofold`](STAGES.md#cofold) sweep
   finds the best fit per gene.
 
 ### `cofold_tau`
 - **Type**: float · **Default**: `640.0`
-- **Controls**: decay constant (nt) for single-point CoFold calls. Roughly
-  corresponds to a transcription speed of ~50 nt/s with a ~12.8 s window.
+- **Controls**: decay constant τ (nt) — distance at which the CoFold
+  penalty reaches `≈ 0.63 · α`. Roughly corresponds to a transcription
+  speed of ~50 nt/s with a ~12.8 s pairing window.
 - **When to change**: as above.
 
 ### `cofold_alpha_sweep`

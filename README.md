@@ -28,7 +28,7 @@ deep dive on each):
 - **significance** — dinucleotide-shuffle z-scores per gene (and optionally per window).
 - **tis** — TIS −50/+50 nt zoom; honors 5'UTR when present, clamps at 5'-end when not.
 - **substitution** — synonymous-recoding ΔG permutation test against flat-GC / positional-GC / synonymous null pools.
-- **cofold** — CoFold (α, τ) parameter sweep against the DMS ΔG.
+- **cofold** — CoFold (α, τ) parameter sweep against the DMS ΔG. CoFold is the co-transcriptional folding model of [Proctor & Meyer (2013, *NAR*)](https://academic.oup.com/nar/article/41/19/9090/2411166), which adds a soft penalty `f(d) = α · (1 − exp(−d/τ))` to every candidate base pair of sequence distance `d`. **α** (alpha, kcal/mol) is the asymptotic penalty strength — larger values discourage long-range pairs more strongly. **τ** (tau, nt) is the decay constant — the distance at which the penalty reaches `α·(1 − 1/e) ≈ 0.63·α`; small `τ` makes the penalty bite at short range, large `τ` lets short loops form freely and only penalizes truly long-range contacts. CoFold's published defaults (α = 0.5, τ = 640 nt) correspond to a transcription speed of ~50 nt/s with a ~12.8 s pairing window. The sweep grids both axes and picks the `(α, τ)` that best matches the experimental DMS ΔG per gene.
 - **compare** — yeast↔human COX1 codon-aligned comparative (substitution table, ΔG track, directional flux).
 - **gene-panel** — per-gene composition + paired-pair + local-foldedness panel.
 - **kinetic** — DrTransformer kinetic folding (opt-in only).

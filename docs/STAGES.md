@@ -213,6 +213,37 @@ each (species, gene), folds the CDS at every cell of
 gets to the DMS-evaluated ΔG. Optionally also computes a per-window
 correlation between CoFold ΔG and DMS ΔG.
 
+**Background — what is CoFold, and what do α and τ mean?** CoFold
+(Proctor & Meyer, 2013, *NAR*,
+[doi:10.1093/nar/gkt600](https://academic.oup.com/nar/article/41/19/9090/2411166))
+is a co-transcriptional folding model that augments Vienna's nearest-
+neighbour energy with a soft penalty on every candidate base pair `(i, j)`
+of sequence distance `d = j − i`:
+
+```
+f(d) = α · (1 − exp(−d / τ))      [kcal/mol]
+```
+
+The penalty rises monotonically with `d`, so long-range contacts pay more
+than short-range ones — the kinetic intuition being that bases transcribed
+far apart in time have less chance to find each other before downstream
+sequence appears. The two parameters control the shape of that penalty:
+
+- **α** (`alpha`, kcal/mol) — the **asymptotic penalty** as `d → ∞`. Larger
+  α means stronger discrimination against long-range pairs. At α = 0 the
+  penalty vanishes and CoFold collapses to plain Vienna MFE; at α = 1 a
+  fully long-range pair pays an extra +1 kcal/mol.
+- **τ** (`tau`, nt) — the **decay constant**. The penalty reaches
+  `α · (1 − 1/e) ≈ 0.63·α` at distance `d = τ`. Small τ makes the penalty
+  rise quickly (short loops still pay nearly the full α); large τ keeps
+  short-range pairing free and only penalizes truly long-range contacts.
+
+CoFold's published defaults are **α = 0.5 kcal/mol** and **τ = 640 nt**,
+which the authors derive from a transcription speed of ~50 nt/s and a
+~12.8 s "reach" for downstream pairing. The `cofold` stage tests whether
+those defaults — or some other gene-specific setting — make Vienna's
+folding match the experimental DMS structure better than plain MFE.
+
 **Reads**: `cfg.cofold_alpha_sweep`, `cfg.cofold_tau_sweep`,
 `cfg.window_nt`, `cfg.step_nt`, `cfg.db_files`, `cfg.target_genes`.
 **Writes**:
@@ -233,18 +264,18 @@ correlation between CoFold ΔG and DMS ΔG.
 ## compare
 
 **Purpose**. Yeast↔human COX1 comparative analysis on a codon-aligned
-PAL2NL alignment: per-codon substitution table, ΔG track, transition /
-transversion summary, directional flux.
+PAL2NL alignment: per-codon substitution table, transition/transversion
+summary, directional substitution flux. (The per-codon local-ΔG track
+was dropped — local-ΔG along the transcript is already covered by the
+`window` stage at higher resolution and with both folding engines.)
 
 **Reads**: `cfg.alignment_file`, `cfg.data_dir`, COX1 records from both
 species's `.db` files.
 **Writes**:
 - `compare/cox1_alignment_table.csv`
 - `compare/cox1_substitution_summary.csv`
-- `compare/cox1_local_dG_track.csv`
 - `compare/cox1_directional_flux.csv` (when computed)
 - `compare/cox1_transition_transversion.csv` (when computed)
-- `compare/cox1_dG_track_{species}.{svg|png}`
 - `compare/cox1_substitution_heatmap.{svg|png}`
 - `compare/cox1_directional_flux_heatmap.{svg|png}`
 - `tables/cox1_*.csv` (centralized copies)

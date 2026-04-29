@@ -47,10 +47,11 @@ def _gap_grid_for_species(species_full: pd.DataFrame, species: str,
             except Exception:
                 pass
         ax.set_title(gene, fontsize=TITLE_FONTSIZE - 3)
-        ax.set_xlabel("τ (decay nt)", fontsize=LABEL_FONTSIZE - 2)
-        ax.set_ylabel("α (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
-    fig.suptitle(f"{species} — CoFold parameter sweep, gap to DMS-eval ΔG (red = best)",
-                 fontsize=TITLE_FONTSIZE - 1, y=1.005)
+        ax.set_xlabel("τ — decay constant (nt)", fontsize=LABEL_FONTSIZE - 2)
+        ax.set_ylabel("α — penalty strength (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
+    fig.suptitle(f"{species} — CoFold parameter sweep, gap to DMS-eval ΔG (red = best)\n"
+                 "f(d) = α · (1 − exp(−d / τ));  α = asymptotic penalty,  τ = distance where penalty ≈ 0.63·α",
+                 fontsize=TITLE_FONTSIZE - 2, y=1.01)
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
@@ -97,13 +98,14 @@ def _corr_grid_for_species(species_win: pd.DataFrame, species: str,
             ax.plot(line["alpha"], line["Pearson_r_CoFold_vs_DMS"],
                      "-o", color=color, lw=1.5, ms=5, label=f"τ={int(tau)}")
         ax.axhline(0, color="gray", ls="--", lw=0.7)
-        ax.set_xlabel("α (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
+        ax.set_xlabel("α — penalty strength (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
         ax.set_ylabel("Pearson r (CoFold vs DMS)", fontsize=LABEL_FONTSIZE - 2)
         ax.set_title(gene, fontsize=TITLE_FONTSIZE - 3)
         style_axis(ax)
-        ax.legend(fontsize=8, loc="best", ncol=2)
-    fig.suptitle(f"{species} — CoFold parameter sweep, per-window correlation with DMS ΔG",
-                 fontsize=TITLE_FONTSIZE - 1, y=1.005)
+        ax.legend(fontsize=8, loc="best", ncol=2, title="τ — decay (nt)", title_fontsize=8)
+    fig.suptitle(f"{species} — CoFold parameter sweep, per-window correlation with DMS ΔG\n"
+                 "f(d) = α · (1 − exp(−d / τ));  larger α → stronger long-range penalty,  larger τ → penalty kicks in only at long distance",
+                 fontsize=TITLE_FONTSIZE - 2, y=1.01)
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
