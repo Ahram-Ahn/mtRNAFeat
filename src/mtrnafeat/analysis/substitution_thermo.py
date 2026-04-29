@@ -334,7 +334,7 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
 
 def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Returns (long_distribution_df, summary_df)."""
-    step(f"running substitution-thermo (n={cfg.substitution_n_simulations} per pool, CoFold)")
+    step(f"running substitution-thermo (n={cfg.substitution_n_simulations} per pool, Vienna MFE)")
     jobs: list[_PrefixJob] = []
     rng_seed_base = int(cfg.seed)
     for species, fname in cfg.db_files.items():

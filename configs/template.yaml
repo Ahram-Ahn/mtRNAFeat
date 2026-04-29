@@ -102,15 +102,27 @@ target_genes:
   - COB
   - VAR1
 
-# ─────────────────────── Window scan ───────────────────────
-# Sliding-window length (nt) for the window stage.
-window_nt: 120
+# ───────────────────── Window & local-probability ─────────────────────
+# Rolling-mean width (nt) for the window stage's paired-fraction smoother
+# AND the local-probability plot's smoothed overlay. Centered window.
+rolling_window: 25
 
-# Slide step between windows (nt).
+# RNAplfold defaults for the local-probability stage. These match
+# RNAplfold's published defaults (-W 80 -L 50 -c 0.001).
+rnaplfold_window: 80
+rnaplfold_max_bp_span: 50
+rnaplfold_cutoff: 0.001
+
+# Sliding-window length / step (nt). The current `window` command folds
+# the whole transcript and does not slide; these fields are still read by
+# the `cofold` per-window correlation pass and the `significance --scan`
+# cotrans scan.
+window_nt: 120
 step_nt: 10
 
-# Maximum base-pair span passed to ViennaRNA fold (nt). 300 is the
+# Maximum base-pair span passed to the folder (nt). 300 is the
 # publication-relevant default; larger values approach unrestricted MFE.
+# Used by window, substitution, cofold.
 max_bp_span: 300
 
 # Currently unused by the pipeline; retained for ad-hoc window-size
@@ -131,12 +143,17 @@ cofold_tau: 640.0      # decay constant (nt) — ≈ 50 nt/s × 12.8 s window
 cofold_alpha_sweep: [0.0, 0.25, 0.5, 0.75, 1.0]
 cofold_tau_sweep:   [160.0, 320.0, 640.0, 1280.0, 2560.0]
 
-# Folding engine selector for the `window` command.
-#   "rnastructure" (default) — `Fold -md <max_bp_span>`, matches how the
-#                              .db ground-truth dot-brackets were produced.
+# Folding engine selector for the `window` command (other commands fold
+# unconditionally with ViennaRNA via core.thermo).
+#   "rnastructure" (default) — `Fold -md <max_bp_span>`. Matches how the
+#                              .db ground-truth dot-brackets were
+#                              produced upstream. Requires the
+#                              `RNAstructure` binary on PATH and the
+#                              DATAPATH env var pointing at its
+#                              data_tables/ directory.
 #   "vienna"                  — `RNA.fold_compound` with `md.max_bp_span`.
-# All other commands (significance, cofold, kinetic, ...) still use Vienna
-# via core.thermo. Override per run with `-- --engine vienna|rnastructure`.
+#                              Pure Python; no external binary needed.
+# Override per run with `mtrnafeat window -- --engine vienna|rnastructure`.
 fold_engine: rnastructure
 
 # ────────────────────────── Features ──────────────────────────
@@ -148,8 +165,13 @@ max_loop_artifact_size: 50
 max_heatmap_size: 15
 
 # ─────────────── Substitution-thermo permutation ───────────────
-# Number of synonymous-recoding null pools generated per (species, gene).
-# Each pool is folded under CoFold and compared to the wild-type ΔG.
+# Number of synonymous-recoding null variants generated per pool per
+# (species, gene). Three pools are run (flat-GC, positional-GC,
+# synonymous), so the total fold count per gene is
+# 3 * substitution_n_simulations + 2 (the +2 are the two wild-type
+# references). Every variant is folded with PLAIN ViennaRNA MFE under
+# `max_bp_span` — apples-to-apples vs the wild-type Vienna MFE.
+# (CoFold's soft penalty is exercised separately by the `cofold` stage.)
 substitution_n_simulations: 200
 
 # Codon-truncation cap for substitution permutation (nt). Sequences

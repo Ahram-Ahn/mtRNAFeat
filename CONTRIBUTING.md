@@ -92,21 +92,38 @@ python -c "from mtrnafeat.config import load_config; load_config('configs/templa
 A new stage `foo` requires:
 
 1. **Command module** — `src/mtrnafeat/commands/foo.py` with
-   `def run(cfg: Config, args: list[str] | None = None) -> int:`.
+   `def run(cfg: Config, args: list[str] | None = None) -> int:`. If the
+   subcommand name has a hyphen (e.g. `foo-bar`), the module name must
+   use an underscore (`foo_bar.py`) — the CLI dispatcher rewrites
+   hyphens before importing.
 2. **CLI registration** — add `"foo": "mtrnafeat.commands.foo"` to
    `SUBCOMMANDS` in [src/mtrnafeat/cli.py](src/mtrnafeat/cli.py).
-3. **Pipeline registration** (if it should run inside `run-all`) — add the
-   module name to the `INDEPENDENT` tuple in
+3. **Pipeline registration** (if it should run inside `run-all`) — add
+   the module name (underscore form) to the `INDEPENDENT` tuple in
    [src/mtrnafeat/commands/pipeline.py](src/mtrnafeat/commands/pipeline.py).
-   Stages that need external binaries (like `kinetic`) should NOT be added
-   here — keep them opt-in.
-4. **Output convention** — write CSVs via `canonical_csv()` and figures
-   via `plot_path()` (both honor `cfg.plot_format` / `cfg.dpi`). For
-   summary tables that belong in `tables/`, also call `tables_csv()`.
-5. **Docs** — add a section to [docs/STAGES.md](docs/STAGES.md) with
-   Purpose / Reads / Writes / Flags / Notes.
-6. **Tests** — at minimum, add the stage to `tests/test_cli_smoke.py`
-   so a fresh checkout exercises it.
+   The orchestrator translates underscores back to hyphens when invoking
+   the CLI in parallel mode. Stages that need external binaries (like
+   `kinetic`) should NOT be added here — keep them opt-in.
+4. **Output convention** — write CSVs via
+   [`canonical_csv()`](src/mtrnafeat/io/writers.py) (atomic write,
+   alphabetized columns, `%.10g` floats) and figures via
+   [`plot_path()`](src/mtrnafeat/viz/style.py) so the format honors
+   `cfg.plot_format` / `cfg.dpi`. For summary tables that belong in
+   `tables/`, also call `tables_csv()`.
+5. **Plot style** — in your viz module, call `apply_theme()` then
+   `style_axis(ax)` from `mtrnafeat.viz.style` so figures match the
+   publication-quality defaults (DejaVu Sans, fontsize 12+, transparent
+   background, vector text).
+6. **Docs** — add a section to [docs/STAGES.md](docs/STAGES.md) with
+   Purpose / Reads / Writes / Flags / Notes. If the stage adds new
+   config fields, also document them in
+   [docs/CONFIG.md](docs/CONFIG.md) and
+   [configs/template.yaml](configs/template.yaml) (see "Adding a
+   config field" above).
+7. **README** — add the stage to the Features list and the
+   Stages-at-a-glance table.
+8. **Tests** — at minimum, add the stage to `tests/test_cli_smoke.py`
+   so a fresh checkout exercises it on the mini fixture.
 
 ## Commit style
 

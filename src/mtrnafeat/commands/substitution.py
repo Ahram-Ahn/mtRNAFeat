@@ -2,8 +2,11 @@
 
 Promoted from `legacy/base_substitution/03.*`. Three null pools per gene
 (flat-GC, positional-GC, synonymous) compared against the wild-type ΔG
-under CoFold. Emits both the long-format distribution CSV and a per-gene
-summary table; figures are KDE small-multiples + a Z-heatmap.
+under plain ViennaRNA MFE — apples-to-apples vs the wild-type Vienna
+fold. The dedicated `cofold` stage handles the soft-penalty exploration
+separately. Emits the long-format distribution CSV in `substitution/`,
+the per-gene summary CSV in `tables/`, and per-species KDE + Z-heatmap
+figures in `substitution/`.
 
 Args (after `--`):
     --n INT          override cfg.substitution_n_simulations (default: 200)

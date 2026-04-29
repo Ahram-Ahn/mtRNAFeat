@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Same smoke run as 01, but with --parallel so independent stages fire
-# concurrently. Useful for verifying that the parallel pipeline mode
-# behaves correctly and that signals/concordance correctly wait for their
-# upstream stages.
+# Same smoke run as 01, but with --parallel so every analysis stage fires
+# concurrently as a subprocess. Useful for verifying that the parallel
+# pipeline mode behaves correctly across all stages.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."

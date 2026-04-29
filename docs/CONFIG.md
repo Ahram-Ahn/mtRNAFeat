@@ -19,10 +19,12 @@ value for that run only.
   `sim_freqs_per_species`, `n_shuffles`
 - [Parallelism](#parallelism) — `n_workers`
 - [Genes](#genes) — `target_genes`
-- [Window scan](#window-scan) — `window_nt`, `step_nt`, `max_bp_span`,
-  `window_size_sweep`
+- [Window & local-probability](#window--local-probability) — `rolling_window`,
+  `rnaplfold_window`, `rnaplfold_max_bp_span`, `rnaplfold_cutoff`,
+  `window_nt`, `step_nt`, `max_bp_span`, `window_size_sweep`,
+  `fold_engine`
 - [CoFold](#cofold) — `cofold_alpha`, `cofold_tau`, `cofold_alpha_sweep`,
-  `cofold_tau_sweep`, `fold_engine`
+  `cofold_tau_sweep`
 - [Features](#features) — `max_loop_artifact_size`, `max_heatmap_size`
 - [Substitution-thermo](#substitution-thermo) — `substitution_n_simulations`,
   `substitution_max_nt`
@@ -153,30 +155,90 @@ value for that run only.
 
 ---
 
-## Window scan
+## Window & local-probability
+
+The `window` and `local-probability` stages each produce a per-position
+track per (species, gene). They share two ideas — a rolling-mean smoother
+and a max-bp-span cap — but they answer different questions: `window`
+re-folds the transcript and reports paired/unpaired booleans; `local-
+probability` runs RNAplfold and reports a continuous pair probability.
+
+### `rolling_window`
+- **Type**: int · **Default**: `25`
+- **Controls**: rolling-window width (nt) used by the `window` stage's
+  paired-fraction smoother and by the `local-probability` plot's
+  smoothed overlay. Centered window, 1-nt step.
+- **Used by**: [`window`](STAGES.md#window),
+  [`local-probability`](STAGES.md#local-probability).
+- **CLI override**: `mtrnafeat window … -- --rolling-window N` /
+  `mtrnafeat local-probability … -- --smooth N`.
+
+### `rnaplfold_window`
+- **Type**: int · **Default**: `80`
+- **Controls**: ViennaRNA RNAplfold local-window size `W` (nt). Matches
+  RNAplfold's published default `-W 80`.
+- **Used by**: [`local-probability`](STAGES.md#local-probability).
+- **CLI override**: `mtrnafeat local-probability … -- --window N`.
+
+### `rnaplfold_max_bp_span`
+- **Type**: int · **Default**: `50`
+- **Controls**: RNAplfold max base-pair span `L` (nt). Matches
+  `-L 50`.
+- **Used by**: `local-probability`.
+- **CLI override**: `mtrnafeat local-probability … -- --max-bp-span N`.
+
+### `rnaplfold_cutoff`
+- **Type**: float · **Default**: `0.001`
+- **Controls**: RNAplfold pair-probability cutoff. Pairs with
+  probability below this threshold are not reported. Matches `-c 0.001`.
+- **Used by**: `local-probability`.
+- **CLI override**: `mtrnafeat local-probability … -- --cutoff F`.
 
 ### `window_nt`
 - **Type**: int · **Default**: `120`
-- **Controls**: sliding-window length (nt) for the window stage.
-- **Used by**: [`window`](STAGES.md#window).
+- **Controls**: sliding-window length (nt). The current `window`
+  command does not slide (it folds the whole transcript), but the
+  `cofold` per-window correlation pass and the `significance --scan`
+  cotrans scan still use this field.
+- **Used by**: [`cofold`](STAGES.md#cofold),
+  [`significance --scan`](STAGES.md#significance).
 
 ### `step_nt`
 - **Type**: int · **Default**: `10`
-- **Controls**: slide step between consecutive windows (nt).
-- **Used by**: `window`.
+- **Controls**: slide step between consecutive windows (nt) for the
+  same per-window passes that read `window_nt`.
+- **Used by**: `cofold`, `significance --scan`.
 
 ### `max_bp_span`
 - **Type**: int · **Default**: `300`
-- **Controls**: maximum base-pair span passed to ViennaRNA fold (nt).
-  300 nt is the publication-relevant default; larger values approach
+- **Controls**: maximum base-pair span passed to the folder (nt). 300 nt
+  is the publication-relevant default; larger values approach
   unrestricted MFE.
-- **Used by**: `window`, `substitution`, anywhere structure is folded.
+- **Used by**: `window`, `substitution`, `cofold`, anywhere a structure
+  is folded with a hard span cap.
+- **CLI override**: `mtrnafeat window … -- --span N`.
 
 ### `window_size_sweep`
 - **Type**: tuple[int, ...] · **Default**: `(60, 120, 240)`
-- **Controls**: candidate window sizes for ad-hoc sensitivity exploration.
-- **Used by**: currently unused by the pipeline; retained for hand-rolled
-  scripts.
+- **Controls**: candidate window sizes for ad-hoc sensitivity
+  exploration.
+- **Used by**: currently unused by the pipeline; retained for
+  hand-rolled scripts.
+
+### `fold_engine`
+- **Type**: str · **Default**: `rnastructure`
+- **Controls**: folding engine for the `window` command. One of
+  `rnastructure` or `vienna`.
+  - `rnastructure` (default) — matches how the upstream `.db`
+    ground-truth dot-brackets were produced (`Fold -md <max_bp_span>`).
+    Requires the `RNAstructure` binary on PATH and the `DATAPATH`
+    environment variable pointing at its `data_tables/` directory.
+  - `vienna` — `RNA.fold_compound(seq, md)` with `md.max_bp_span = N`.
+    Pure-Python; no external binary needed.
+- **Used by**: `window`. All other commands fold via ViennaRNA
+  unconditionally (`window` is the only stage with a configurable
+  engine).
+- **CLI override**: `mtrnafeat window … -- --engine vienna|rnastructure`.
 
 ---
 
@@ -227,6 +289,8 @@ plain Vienna unless explicitly invoked otherwise.
 ### `cofold_alpha_sweep`
 - **Type**: tuple[float, ...] · **Default**: `(0.0, 0.25, 0.5, 0.75, 1.0)`
 - **Controls**: alpha grid for the [`cofold`](STAGES.md#cofold) sweep.
+  α = 0 collapses the cell to plain Vienna MFE — keeping it in the grid
+  acts as a built-in control.
 - **Used by**: `cofold` only.
 
 ### `cofold_tau_sweep`
@@ -234,11 +298,6 @@ plain Vienna unless explicitly invoked otherwise.
   `(160.0, 320.0, 640.0, 1280.0, 2560.0)`
 - **Controls**: tau grid for the [`cofold`](STAGES.md#cofold) sweep.
 - **Used by**: `cofold` only.
-
-### `fold_engine`
-- **Type**: str · **Default**: `vienna`
-- **Controls**: folding engine selector. Only `"vienna"` is currently
-  wired through; the `cofold` stage always uses CoFold regardless.
 
 ---
 
@@ -262,12 +321,16 @@ plain Vienna unless explicitly invoked otherwise.
 
 ### `substitution_n_simulations`
 - **Type**: int · **Default**: `200`
-- **Controls**: number of synonymous-recoding null pools generated per
-  (species, gene). Each pool is folded under CoFold and compared to the
-  wild-type ΔG.
+- **Controls**: number of synonymous-recoding null variants generated
+  per pool per (species, gene). The stage uses three pools (flat-GC,
+  positional-GC, synonymous), so total folds per gene are
+  `3 × substitution_n_simulations + 2` (the `+2` are the two wild-type
+  references). Every variant is folded under **plain ViennaRNA MFE**
+  with `cfg.max_bp_span` — the wild-type comparison stays apples-to-
+  apples.
 - **Used by**: [`substitution`](STAGES.md#substitution).
-- **When to change**: more iterations → tighter empirical p-values, slower
-  run. CLI override: `mtrnafeat substitution -- --n 1000`.
+- **When to change**: more iterations → tighter empirical p-values,
+  slower run. CLI override: `mtrnafeat substitution -- --n 1000`.
 
 ### `substitution_max_nt`
 - **Type**: int · **Default**: `300`

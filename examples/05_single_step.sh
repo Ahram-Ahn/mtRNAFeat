@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # Run a single subcommand. Useful for iterating on one analysis or one plot.
-# Edit STEP below or pass it on the command line: STEP=nascent ./05_single_step.sh
+# Edit STEP below or pass it on the command line:
+#   STEP=tis ./05_single_step.sh
+#   STEP=local-probability CONFIG=configs/all.yaml ./05_single_step.sh
+# Pass subcommand-specific args after a literal `--`:
+#   STEP=substitution ./05_single_step.sh -- --n 50 --max-nt 300
+#
+# Valid STEP values match `mtrnafeat <subcommand>`:
+#   stats, landscape, features, window, local-probability, significance,
+#   tis, compare, substitution, cofold, gene-panel, kinetic, plot.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."

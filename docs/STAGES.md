@@ -25,9 +25,10 @@ mtrnafeat substitution --config configs/all.yaml --outdir runs/x -- --n 1000 --m
 
 - [`stats`](#stats) — per-transcript statistics + boxplot
 - [`landscape`](#landscape) — GC-gradient simulation + experimental overlay
-- [`features`](#features) — element decomposition, heatmaps, phase-space
-- [`window`](#window) — sliding-window DMS-vs-Vienna scan
-- [`significance`](#significance) — dinucleotide-shuffle z-scores
+- [`features`](#features) — element decomposition, heatmaps, phase-space, span ECDFs
+- [`window`](#window) — whole-transcript fold-and-compare trace
+- [`local-probability`](#local-probability) — RNAplfold per-position pair probabilities
+- [`significance`](#significance) — dinucleotide-shuffle z-scores (+ optional cotrans scan)
 - [`tis`](#tis) — −50/+50 nt zoom around start codon
 - [`substitution`](#substitution) — synonymous-recoding ΔG permutation
 - [`cofold`](#cofold) — CoFold (α, τ) parameter sweep
@@ -106,51 +107,112 @@ plus simulated counterparts using `cfg.sim_*` for null comparison.
 
 ## window
 
-**Purpose**. Slides a window of length `window_nt` along every transcript
-at step `step_nt` and folds each window under `max_bp_span`. Produces a
-DMS-vs-Vienna ΔG trace per gene.
+**Purpose**. Whole-transcript **fold-and-compare** for every (species, gene).
+For each transcript, folds the sequence three ways and emits one figure
+plus per-position and summary CSVs:
 
-**Reads**: `cfg.window_nt`, `cfg.step_nt`, `cfg.max_bp_span`, `cfg.db_files`,
-`cfg.target_genes`.
+1. **DMS-guided**: take the dot-bracket from the `.db` file and recompute
+   its ΔG with ViennaRNA `eval_structure` (the `.db` header MFE is not
+   used directly).
+2. **Vienna full**: pure ViennaRNA MFE on the whole transcript with no
+   max-bp-span cap.
+3. **Engine span**: refold the transcript with `max_bp_span = N` (default
+   300 nt) under the chosen engine — `rnastructure` (default, matches
+   how the `.db` ground truth was produced upstream) or `vienna`.
+
+The plot stacks a rolling paired-fraction trace for all three folds
+(legend outside the data axis) and a transcript-architecture strip
+(5'UTR / CDS / 3'UTR) below.
+
+**Reads**: `cfg.max_bp_span`, `cfg.rolling_window`, `cfg.fold_engine`,
+`cfg.db_files`, `cfg.target_genes`.
 **Writes**:
-- `window/window_scan_metrics.csv`
-- `window/window_scan_summary.csv`
+- `window/window_per_position.csv` (one row per (species, gene, position) with the three rolling paired-fraction tracks)
+- `window/window_summary.csv` (one row per (species, gene) with the three ΔGs and overall paired fractions)
+- `window/window_failed.csv` (only if any genes failed — e.g. RNAstructure DATAPATH unset)
 - `window/window_{SPECIES}_{GENE}.{svg|png}` (one per gene)
 
 **Flags (after `--`)**:
 | Flag | Type | Effect |
 |------|------|--------|
-| `--window N` | int | override `window_nt` for this run. |
-| `--step N` | int | override `step_nt`. |
-| `--span N` | int | override `max_bp_span`. |
+| `--span N` | int | override `cfg.max_bp_span` (default 300). |
+| `--rolling-window N` | int | rolling-mean width on the per-position paired vector (default `cfg.rolling_window` = 25). |
+| `--engine NAME` | str | `rnastructure` (default) or `vienna`. |
+
+---
+
+## local-probability
+
+**Purpose**. ViennaRNA's RNAplfold per-position pair-probability scan over
+each transcript. For every (species, gene), reports the local pair
+probability `p(i,j)` along the sequence — useful for spotting positions
+that are nearly always paired (high probability across the local window)
+versus positions that fluctuate or stay open. Complements the binary
+"paired vs. unpaired" picture from the `window` stage.
+
+**Reads**: `cfg.rnaplfold_window`, `cfg.rnaplfold_max_bp_span`,
+`cfg.rnaplfold_cutoff`, `cfg.rolling_window` (smoothing for the plot
+overlay), `cfg.db_files`, `cfg.target_genes`.
+**Writes**:
+- `local_probability/local_probability_per_position.csv` (one row per (species, gene, position) with raw and smoothed probability)
+- `local_probability/local_probability_{SPECIES}_{GENE}.{svg|png}` (one per gene)
+
+**Flags (after `--`)**:
+| Flag | Type | Effect |
+|------|------|--------|
+| `--window N` | int | RNAplfold window size (default `cfg.rnaplfold_window` = 80). |
+| `--max-bp-span N` | int | RNAplfold max base-pair span (default `cfg.rnaplfold_max_bp_span` = 50). |
+| `--cutoff F` | float | RNAplfold pair-probability cutoff (default `cfg.rnaplfold_cutoff` = 0.001). |
+| `--smooth N` | int | rolling-window width for the smoothed plot overlay (default `cfg.rolling_window`). |
+
+These defaults match RNAplfold's own published defaults (`-W 80 -L 50 -c 0.001`).
 
 ---
 
 ## significance
 
-**Purpose**. Per-gene z-scores from dinucleotide-preserving shuffle nulls.
-Optionally also per-window.
+**Purpose**. Per-gene structural-significance with two layers, both
+restricted to `cfg.target_genes`:
 
-**Reads**: `cfg.n_shuffles`, `cfg.db_files`, `cfg.target_genes`,
-plus `cfg.window_nt`/`cfg.step_nt`/`cfg.max_bp_span` if `--per-window`.
+1. **Sequence-level z-score** (always emitted, fast). Folds each whole
+   transcript and a dinucleotide-shuffled null pool (Workman & Krogh
+   1999 null), reports `Z_MFE = (observed − null_mean) / null_std`.
+2. **Per-gene cotranscriptional / sliding scan** (with `--scan`).
+   Walks the transcript in the chosen mode and tracks Vienna's MFE,
+   ensemble diversity, and paired fraction. Z-scores the first-difference
+   signals so structural rearrangement events stand out, and detects
+   peaks above `--z-threshold`.
+
+**Reads**: `cfg.n_shuffles`, `cfg.db_files`, `cfg.target_genes`. The
+`--scan` pass uses its own `--window`/`--step` (not the `cfg.window_nt`
+defaults).
 **Writes**:
-- `significance/z_per_gene.csv`
-- `significance/z_per_window.csv` (only with `--per-window`)
+- `significance/z_per_gene.csv` (always)
+- `significance/cotrans_per_window.csv` (only with `--scan`)
+- `significance/cotrans_{SPECIES}_{GENE}.{svg|png}` (only with `--scan`, one per gene)
 
 **Flags (after `--`)**:
-| Flag | Effect |
-|------|--------|
-| `--per-window` | also compute z-scores at every window position. |
+| Flag | Type | Effect |
+|------|------|--------|
+| `--scan` | flag | enable the per-gene cotranscriptional scan. |
+| `--mode prefix\|sliding` | str | scan mode (default `sliding`; `prefix` grows the prefix length 0..N to mimic nascent RNA). |
+| `--window N` | int | sliding-mode window size (default 120). |
+| `--step N` | int | prefix-mode growth step or sliding stride (default 30). |
+| `--z-threshold T` | float | peak threshold for the smoothed Δ signals (default 2.0). |
+| `--per-window` | flag | deprecated alias for `--scan` (preserved so `run-all` keeps working). |
+
+`run-all` invokes `significance` with `--per-window`, so the cotrans
+scan runs by default in the full pipeline.
 
 ---
 
 ## tis
 
 **Purpose**. TIS zoom: a −50/+50 nt window centered on the annotated start
-codon, comparing DMS-derived ΔG to Vienna MFE on the same window.
+codon, comparing the DMS-derived ΔG (Vienna `eval_structure` on the
+projected `.db` dot-bracket) to Vienna MFE on the same window.
 
-**5'UTR handling** (commit
-[9362371](../README.md): "TIS: honor 5UTR when present, clamp at 5-end when not"):
+**5'UTR handling**:
 - When a 5'UTR is annotated, the upstream window is `min(L_5UTR, 50)` —
   the actual UTR length, capped at 50.
 - When no 5'UTR is annotated, the window is clamped at the 5' end of the
@@ -158,10 +220,20 @@ codon, comparing DMS-derived ΔG to Vienna MFE on the same window.
 - Each row carries `L_5UTR_total`, `L_5UTR_in_window`, `L_CDS_in_window`,
   `Has_5UTR`, and `Has_Full_5UTR_Context` so downstream consumers can tell
   whether a row represents a full ±50 context or a truncated one.
-- Plots hatch the bars for genes whose upstream context is truncated.
+
+**Plot conventions** (the figure is designed to be read on its own):
+- Bars whose 5'UTR is shorter than 50 nt are **hatched** — upstream
+  context is truncated and the value is not directly comparable to
+  full-context bars.
+- A `ΔG = 0` value is rendered as a small open-diamond marker plus the
+  literal label `0` so it cannot be confused with missing data (the
+  projected DMS structure has zero pairs in the window — a real
+  measurement, not a NaN).
+- A truly missing value (NaN) is annotated `n/a` instead of being
+  drawn as a zero-height bar.
 
 **Reads**: `cfg.db_files`, `cfg.target_genes`, plus per-gene 5'UTR
-annotations from `mtrnafeat.io.annotations`.
+annotations from [`src/mtrnafeat/io/annotations.py`](../src/mtrnafeat/io/annotations.py).
 **Writes**:
 - `tis/tis_dms_vs_mfe.csv`
 - `tis/tis_zoom_grid.{svg|png}`
@@ -170,7 +242,8 @@ annotations from `mtrnafeat.io.annotations`.
 **Flags**: none.
 
 **Code**: [src/mtrnafeat/analysis/tis.py](../src/mtrnafeat/analysis/tis.py),
-[src/mtrnafeat/commands/tis.py](../src/mtrnafeat/commands/tis.py).
+[src/mtrnafeat/commands/tis.py](../src/mtrnafeat/commands/tis.py),
+[src/mtrnafeat/viz/tis_plot.py](../src/mtrnafeat/viz/tis_plot.py).
 
 ---
 
@@ -180,22 +253,37 @@ annotations from `mtrnafeat.io.annotations`.
 compares the wild-type CDS ΔG against three null pools generated by
 synonymous recoding:
 
-1. **Flat-GC** — uniform GC composition.
-2. **Positional-GC** — per-codon-position GC matched.
-3. **Synonymous** — each codon replaced by a synonymous alternative.
+1. **Flat-GC** — uniform GC composition matching the gene's overall GC%.
+2. **Positional-GC** — per-codon-position GC matched (1st / 2nd / wobble
+   GC fractions preserved).
+3. **Synonymous** — each codon replaced by a synonymous alternative,
+   weighted by codon-usage frequency × positional GC.
 
-Every pool member is folded under CoFold; the wild-type ΔG is reported as
-a z-score and empirical p-value against each pool.
+Every pool member is folded with **plain ViennaRNA MFE** (the same
+`thermo.fold_mfe` call as the wild-type reference), so the Z-score
+compares apples to apples. CoFold is not used here — the dedicated
+[`cofold`](#cofold) sweep handles the soft-penalty exploration.
+
+**ΔG provenance — the `.db` header MFE is intentionally bypassed.** Both
+wild-type references are recomputed by ViennaRNA on the `.db` records:
+
+- `WT_MFE` — Vienna MFE of the wild-type sequence
+  (`thermo.fold_mfe(seq)`); compared against the pool.
+- `WT_DMS_Eval` — Vienna `eval_structure` on the `.db` dot-bracket
+  truncated to the chunk length (`substitution_max_nt`).
+- `WT_DMS_Eval_FullLength` — same but for the full transcript-length
+  DMS structure (a sanity check that the chunk-truncated value tracks
+  the full-length one).
+
+The summary CSV carries a `DMS_dG_Source` column that spells this out.
 
 **Reads**: `cfg.substitution_n_simulations`, `cfg.substitution_max_nt`,
-`cfg.cofold_alpha`, `cfg.cofold_tau`, `cfg.db_files`, `cfg.target_genes`,
-`cfg.n_workers`.
+`cfg.max_bp_span`, `cfg.db_files`, `cfg.target_genes`, `cfg.n_workers`.
 **Writes**:
-- `substitution/substitution_thermo_distribution.csv` (long-format raw)
-- `substitution/substitution_thermo_summary.csv` (per-gene Z, p)
-- `substitution/kde_panels_*.{svg|png}` (small-multiples KDE)
-- `substitution/z_heatmap.{svg|png}`
-- `tables/substitution_thermo_summary.csv` (centralized copy)
+- `substitution/substitution_thermo_distribution.csv` (long-format raw — one row per (species, gene, pool, simulation) with that variant's ΔG)
+- `substitution/substitution_kde_panels_{human,yeast}.{svg|png}` (per-species small-multiples KDE)
+- `substitution/substitution_z_heatmap_{human,yeast}.{svg|png}` (per-species heatmap of Z(WT_MFE − Pool))
+- `tables/substitution_thermo_summary.csv` (per-gene Z and p; the only summary CSV — there is no copy under `substitution/`)
 
 **Flags (after `--`)**:
 | Flag | Type | Effect |
@@ -245,19 +333,20 @@ those defaults — or some other gene-specific setting — make Vienna's
 folding match the experimental DMS structure better than plain MFE.
 
 **Reads**: `cfg.cofold_alpha_sweep`, `cfg.cofold_tau_sweep`,
-`cfg.window_nt`, `cfg.step_nt`, `cfg.db_files`, `cfg.target_genes`.
+`cfg.window_nt`, `cfg.step_nt`, `cfg.max_bp_span`, `cfg.db_files`,
+`cfg.target_genes`, `cfg.n_workers`.
 **Writes**:
-- `cofold/cofold_grid.csv`
-- `cofold/cofold_best_per_gene.csv`
-- `cofold/cofold_per_window_corr.csv` (unless `--no-window-corr`)
-- `cofold/gap_heatmap_*.{svg|png}` (one per gene)
-- `cofold/per_window_corr_*.{svg|png}` (unless skipped)
+- `cofold/cofold_grid.csv` (long-format: one row per (species, gene, α, τ) with the gap to DMS-eval ΔG)
+- `cofold/cofold_best_per_gene.csv` (the (α, τ) cell that minimizes `|CoFold − DMS|` for each gene)
+- `cofold/cofold_per_window_corr.csv` (unless `--no-window-corr`; per-window Pearson r between CoFold and DMS-projected ΔG)
+- `cofold/cofold_gap_heatmap_{human,yeast}.{svg|png}` (per-species small-multiples α × τ heatmap, red rectangle on the best cell per gene)
+- `cofold/cofold_per_window_corr_{human,yeast}.{svg|png}` (unless `--no-window-corr`; one curve per τ, x-axis is α)
 - `tables/cofold_best_per_gene.csv` (centralized copy)
 
 **Flags (after `--`)**:
 | Flag | Effect |
 |------|--------|
-| `--no-window-corr` | skip the per-window correlation pass (faster). |
+| `--no-window-corr` | skip the per-window correlation pass (faster; drops the per-window corr CSV and curves). |
 
 ---
 
@@ -290,10 +379,22 @@ fixtures that don't include COX1.
 
 ## gene-panel
 
-**Purpose**. Generalized version of the legacy ND6-only panel — composition
-+ paired-pair + local-foldedness — emitted once per (species, gene).
+**Purpose**. Per-(species, gene) 3-panel composition figure:
 
-**Reads**: `cfg.db_files`, `cfg.target_genes`.
+1. Base counts (A / U / G / C bar chart).
+2. Paired-pair composition (G-C / A-U / G-U wobble as % of paired columns).
+3. Rolling local paired-fraction trace along the transcript, with a
+   dedicated 5'UTR / CDS / 3'UTR architecture strip below (same
+   consistent label treatment as the `window` plot).
+
+The panel title reports the overall sequence GC% so cross-gene
+comparisons are easy. When 5'UTR/3'UTR annotations from
+[`io/annotations.py`](../src/mtrnafeat/io/annotations.py) are missing for
+a gene, the architecture strip is omitted (the trace fills the third
+panel by itself).
+
+**Reads**: `cfg.db_files`, `cfg.target_genes`, plus per-gene annotations
+from `mtrnafeat.io.annotations`.
 **Writes**:
 - `gene_panels/panel_{SPECIES}_{GENE}.{svg|png}` (one figure per gene)
 
@@ -347,15 +448,22 @@ mtrnafeat plot features  --from runs/all
 
 ## run-all
 
-**Purpose**. Orchestrates every independent stage in one invocation. The
-pipeline has no cross-stage dependencies after the round-3 cleanup, so
-`--parallel` simply fires all stages concurrently as subprocesses.
+**Purpose**. Orchestrates every independent analysis stage in one
+invocation. Stages have no cross-stage data dependencies, so
+`--parallel` simply fires all of them concurrently as subprocesses
+(pool size = `min(len(stages) + 1, cpu_count())`).
 
-**Stages run** (in order, sequential mode):
-`stats`, `landscape`, `features`, `window`, `significance`, `tis`,
-`compare`, `substitution`, `cofold`, `gene_panel`.
+**Stages run** (in order, sequential mode; matches `INDEPENDENT` in
+[src/mtrnafeat/commands/pipeline.py](../src/mtrnafeat/commands/pipeline.py)):
 
-**Stages NOT run**: `kinetic` (opt-in only), `plot` (re-render utility).
+`stats`, `landscape`, `features`, `window`, `local_probability`,
+`significance`, `tis`, `compare`, `substitution`, `cofold`, `gene_panel`.
+
+`run-all` also passes `--per-window` to `significance` automatically, so
+the cotrans scan runs by default.
+
+**Stages NOT run**: `kinetic` (opt-in only — requires DrTransformer on
+PATH), `plot` (re-render utility).
 
 **Reads**: every config field consumed by the included stages.
 **Writes**: every output of the included stages, under `cfg.outdir`.
@@ -364,11 +472,15 @@ pipeline has no cross-stage dependencies after the round-3 cleanup, so
 | Flag | Effect |
 |------|--------|
 | `--parallel` | fire stages concurrently in subprocesses (pool sized by `cpu_count()`). |
-| `--skip a,b,c` | comma-separated stage names to skip. |
+| `--skip a,b,c` | comma-separated stage names to skip (use the underscore form for `local_probability` and `gene_panel`, e.g. `--skip kinetic,local_probability`). |
 
 **Examples**:
 ```bash
 mtrnafeat run-all --config configs/all.yaml --outdir runs/all
 mtrnafeat run-all --parallel --config configs/all.yaml --outdir runs/all
 mtrnafeat run-all --parallel --skip significance,cofold --config configs/all.yaml --outdir runs/x
+
+# Smoke run on the bundled fixtures (Vienna engine, --skip kinetic just
+# matches what examples/01_smoke_mini.sh does):
+mtrnafeat run-all --config test_data/mini.config.yaml --outdir runs/smoke -- --skip kinetic
 ```
