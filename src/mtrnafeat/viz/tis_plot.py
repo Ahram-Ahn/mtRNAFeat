@@ -1,24 +1,20 @@
 """TIS zoom visualization: −50 / +50 nt around the start codon.
 
-Publication-quality two-panel layout: Human (left) and Yeast (right),
-sharing the y-axis so cross-species energy comparisons read at a glance.
+Two-panel layout (Human left, Yeast right) sharing the y-axis so
+cross-species energy comparisons read at a glance.
 
-Visual conventions designed to keep ΔG = 0 from being confused with
-"missing data":
+Visual conventions:
 
-  * A **distinct ΔG = 0 marker** (a small open diamond) is drawn at the
-    bar position when the energy is exactly zero — this happens when the
-    DMS dot-bracket has no pairs surviving the projection onto the TIS
-    window, which is a *real* signal ("the in-vivo structure here is
-    unfolded") and must be visually different from a missing bar.
+  * x-tick labels are gene names only (single-line, horizontal). The
+    available 5'UTR length per gene is shown as a small italic
+    annotation directly below each gene's bar group so the metadata
+    doesn't bloat the tick label. A small "*" suffix flags the gene
+    when the 5'UTR is shorter than the requested upstream window
+    (context truncated).
   * Bars whose value is NaN (failed eval / no data) are explicitly
     skipped and the slot is annotated "n/a" above the x-axis baseline.
-  * Bars sitting next to a ΔG = 0 marker are drawn at full opacity so
-    the contrast between "zero, real" and "missing" is unambiguous.
-
-Hatched bars still flag genes whose 5'UTR is shorter than `upstream_nt`
-(upstream context truncated). x-tick labels show the actual usable
-upstream length per gene as `GENE (5'UTR=N)`.
+  * ΔG = 0 (no pairs survived the TIS projection — a *real* signal,
+    not missing data) is drawn as a small open diamond at the baseline.
 """
 from __future__ import annotations
 
@@ -55,17 +51,11 @@ def _bar_with_zero_handling(ax, xs, values, width, color, label, full_ctx):
             bar.set_hatch("///")
             bar.set_edgecolor("white")
         if abs(raw) < 1e-6:
-            # Open diamond at the zero baseline so "ΔG = 0" reads
-            # differently from a missing bar.
             ax.plot(bar.get_x() + bar.get_width() / 2, 0,
-                     marker="D", markersize=7,
+                     marker="D", markersize=6,
                      markerfacecolor="white",
                      markeredgecolor=_ZERO_MARKER_COLOR,
-                     markeredgewidth=1.4, zorder=6, clip_on=False)
-            ax.annotate("0", xy=(bar.get_x() + bar.get_width() / 2, 0),
-                         xytext=(0, 12), textcoords="offset points",
-                         ha="center", va="bottom", fontsize=8,
-                         color=_ZERO_MARKER_COLOR, zorder=6)
+                     markeredgewidth=1.2, zorder=6, clip_on=False)
     return bars
 
 
@@ -84,19 +74,36 @@ def _draw_one(ax, sub: pd.DataFrame, species: str) -> None:
 
     _bar_with_zero_handling(
         ax, ind - width / 2, sub["DMS_TIS_Energy"].astype(float).values,
-        width, _DMS_COLOR, "DMS-projected ΔG (Vienna eval)", full_ctx,
+        width, _DMS_COLOR, "DMS-derived", full_ctx,
     )
     _bar_with_zero_handling(
         ax, ind + width / 2, sub["Vienna_TIS_MFE"].astype(float).values,
-        width, _MFE_COLOR, "Vienna MFE", full_ctx,
+        width, _MFE_COLOR, "Vienna prediction", full_ctx,
     )
 
-    if "L_5UTR_in_window" in sub.columns:
-        labels = [f"{g}\n(5'UTR={int(u)} nt)" for g, u in zip(sub["Gene"], sub["L_5UTR_in_window"])]
-    else:
-        labels = list(sub["Gene"])
+    # Single-line, horizontal x-tick labels: gene name + a "*" flag for
+    # genes whose 5'UTR is shorter than the requested window.
+    gene_labels = [f"{g}*" if not full else str(g)
+                   for g, full in zip(sub["Gene"], full_ctx)]
     ax.set_xticks(list(ind))
-    ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=10)
+    ax.set_xticklabels(gene_labels, rotation=0, fontsize=10, fontweight="bold")
+
+    # 5'UTR length shown as a quiet italic annotation below the bar
+    # group instead of inflating the tick label.
+    if "L_5UTR_in_window" in sub.columns:
+        ymin = ax.get_ylim()[0]
+        for x, u in zip(ind, sub["L_5UTR_in_window"].astype(int)):
+            ax.annotate(
+                f"5'UTR={u}",
+                xy=(x, 0), xycoords=("data", "data"),
+                xytext=(0, -18), textcoords="offset points",
+                ha="center", va="top", fontsize=8,
+                color="#666666", style="italic",
+                annotation_clip=False,
+            )
+        # Reserve room below x=0 so the annotation isn't clipped.
+        del ymin
+
     ax.axhline(0, color="black", lw=0.8, zorder=2)
     ax.set_title(species, fontsize=TITLE_FONTSIZE - 1, pad=8, fontweight="bold")
     ax.set_ylabel("ΔG (kcal/mol)", fontsize=LABEL_FONTSIZE)
@@ -132,24 +139,24 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     handles = [
         plt.Rectangle((0, 0), 1, 1, facecolor=_DMS_COLOR,
                        edgecolor="#333333", linewidth=0.7,
-                       label="DMS-projected ΔG (Vienna eval on .db structure)"),
+                       label="DMS-derived"),
         plt.Rectangle((0, 0), 1, 1, facecolor=_MFE_COLOR,
-                       edgecolor="#333333", linewidth=0.7, label="Vienna MFE"),
+                       edgecolor="#333333", linewidth=0.7,
+                       label="Vienna prediction"),
         plt.Rectangle((0, 0), 1, 1, facecolor="white", edgecolor="#333333",
                        linewidth=0.7, hatch="///",
-                       label="5'UTR < 50 nt (upstream context truncated)"),
+                       label="* 5'UTR truncated"),
         plt.Line2D([0], [0], marker="D", color="none",
                     markerfacecolor="white",
                     markeredgecolor=_ZERO_MARKER_COLOR,
-                    markersize=8, markeredgewidth=1.4,
-                    label="ΔG = 0 (no projected pairs — real, not missing)"),
+                    markersize=7, markeredgewidth=1.2,
+                    label="ΔG = 0 (no pairs)"),
     ]
-    fig.legend(handles=handles, loc="lower center", ncol=2,
-                bbox_to_anchor=(0.5, -0.06), frameon=True, framealpha=0.95,
-                fontsize=10)
-    fig.suptitle("TIS zoom — DMS-projected ΔG vs Vienna MFE around the start codon (−50 / +50 nt)",
+    fig.legend(handles=handles, loc="lower center", ncol=4,
+                bbox_to_anchor=(0.5, -0.04), frameon=False, fontsize=10)
+    fig.suptitle("TIS zoom — DMS vs Vienna ΔG around the start codon (−50 / +50 nt)",
                   fontsize=TITLE_FONTSIZE - 1, y=1.02, fontweight="bold")
-    fig.tight_layout(rect=(0, 0.02, 1, 0.97))
+    fig.tight_layout(rect=(0, 0.06, 1, 0.97))
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return Path(out_path)

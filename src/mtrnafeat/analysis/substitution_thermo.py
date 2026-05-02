@@ -37,12 +37,25 @@ fully reproducible from the dot-bracket structure plus Vienna.
 
 The summary table reports Z-scores and empirical p-values for both refs.
 
-Three nulls:
+Five nulls:
   * **flat_gc**     — random sequence at the gene's overall GC content;
                        AT and GC drawn IID. Tests "is structure driven by GC?"
+  * **flat_acgu**   — random sequence preserving the gene's full A/C/G/U
+                       frequency vector independently. Strictly more
+                       constrained than ``flat_gc``: useful when G and C
+                       (or A and U) frequencies are very asymmetric.
+                       Mitochondrial mRNAs commonly have G≫C on the
+                       L-strand (e.g. human ND6: G=191 vs C=37), and an
+                       overall-GC null hides that asymmetry entirely.
   * **positional_gc** — random sequence preserving codon-position GC content
                        (1st, 2nd, wobble each fixed). Tests "is structure driven
                        by codon-bias of the genome?"
+  * **positional_acgu** — random sequence preserving codon-position
+                       A/C/G/U frequencies independently (twelve
+                       parameters: 4 nucleotides × 3 codon positions).
+                       Strictly more constrained than ``positional_gc``;
+                       the right comparator for transcripts where G/C
+                       and A/U asymmetries differ across codon positions.
   * **synonymous**   — codon-by-codon synonymous resampling, weighted by
                        observed codon usage AND positional GC. Tests
                        "is structure driven by synonymous-codon choice?"
@@ -117,6 +130,18 @@ def _gc_fraction(seq: str) -> float:
     return (s.count("G") + s.count("C")) / max(1, len(s))
 
 
+def _acgu_fraction(seq_dna: str) -> dict[str, float]:
+    """Return the gene's overall A / C / G / T(=U) frequency vector.
+
+    Frequencies are normalized over A+C+G+T only (any non-ACGT character
+    is ignored, which makes the function robust to ambiguity codes).
+    """
+    s = seq_dna.upper()
+    counts = {nt: s.count(nt) for nt in "ACGT"}
+    total = sum(counts.values()) or 1
+    return {nt: counts[nt] / total for nt in "ACGT"}
+
+
 def _positional_gc(seq_dna: str) -> dict[int, float]:
     codons = _split_codons(seq_dna)
     counts = {1: [0, 0], 2: [0, 0], 3: [0, 0]}  # [gc, total]
@@ -128,6 +153,25 @@ def _positional_gc(seq_dna: str) -> dict[int, float]:
             if nt in "GC":
                 counts[pos][0] += 1
     return {p: (gc / tot) if tot else 0.0 for p, (gc, tot) in counts.items()}
+
+
+def _positional_acgu(seq_dna: str) -> dict[int, dict[str, float]]:
+    """Per-codon-position A / C / G / T frequency vectors."""
+    codons = _split_codons(seq_dna)
+    counts: dict[int, dict[str, int]] = {p: {nt: 0 for nt in "ACGT"} for p in (1, 2, 3)}
+    totals: dict[int, int] = {1: 0, 2: 0, 3: 0}
+    for c in codons:
+        if len(c) != 3:
+            continue
+        for pos, nt in enumerate(c, start=1):
+            if nt in counts[pos]:
+                counts[pos][nt] += 1
+                totals[pos] += 1
+    out: dict[int, dict[str, float]] = {}
+    for pos in (1, 2, 3):
+        denom = totals[pos] or 1
+        out[pos] = {nt: counts[pos][nt] / denom for nt in "ACGT"}
+    return out
 
 
 def _codon_usage_prior(seq_dna: str, table: dict[str, str]) -> dict[str, dict[str, float]]:
@@ -156,12 +200,42 @@ def _flat_gc(length: int, gc: float, rng: random.Random) -> str:
     return "".join(out)
 
 
+def _flat_acgu(length: int, freqs: dict[str, float], rng: random.Random) -> str:
+    """IID nucleotide draws preserving the full A/C/G/T frequency vector.
+
+    Uses ``random.choices`` with explicit weights so G≠C and A≠T
+    asymmetries are respected. Reduces to ``_flat_gc`` only when
+    P(G)=P(C) and P(A)=P(T).
+    """
+    nts = "ACGT"
+    weights = [freqs.get(nt, 0.0) for nt in nts]
+    return "".join(rng.choices(nts, weights=weights, k=length))
+
+
 def _positional_gc_sample(n_codons: int, pos_gc: dict[int, float], rng: random.Random) -> str:
     out = []
     for _ in range(n_codons):
         for pos in (1, 2, 3):
             p = pos_gc[pos]
             out.append(rng.choice("GC") if rng.random() < p else rng.choice("AT"))
+    return "".join(out)
+
+
+def _positional_acgu_sample(n_codons: int,
+                            pos_freqs: dict[int, dict[str, float]],
+                            rng: random.Random) -> str:
+    """Per-codon-position 4-way A/C/G/T sampling.
+
+    Generalizes ``_positional_gc_sample`` by tracking each nucleotide's
+    frequency at each codon position independently (12 parameters total).
+    """
+    nts = "ACGT"
+    out: list[str] = []
+    for _ in range(n_codons):
+        for pos in (1, 2, 3):
+            freqs = pos_freqs[pos]
+            weights = [freqs.get(nt, 0.0) for nt in nts]
+            out.append(rng.choices(nts, weights=weights, k=1)[0])
     return "".join(out)
 
 
@@ -204,8 +278,10 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
         return pd.DataFrame()
     table = codon_table_for(job.species)
     pos_gc = _positional_gc(seq_dna)
+    pos_acgu = _positional_acgu(seq_dna)
     usage_prior = _codon_usage_prior(seq_dna, table)
     overall_gc = _gc_fraction(seq_dna)
+    overall_acgu = _acgu_fraction(seq_dna)
     n_codons = len(seq_dna) // 3
     length = len(seq_dna)
 
@@ -237,12 +313,19 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
         except Exception:
             wt_dms_fulllen = float("nan")
 
+    # Pool order matters for RNG state determinism: existing pools
+    # (flat_gc, positional_gc, synonymous) draw first so historical
+    # outputs are bit-stable. The new ACGU-aware pools draw afterward.
     pools = {
         "flat_gc": [_flat_gc(length, overall_gc, rng) for _ in range(job.n_simulations)],
         "positional_gc": [_positional_gc_sample(n_codons, pos_gc, rng)
                           for _ in range(job.n_simulations)],
         "synonymous": [_synonymous_sample(seq_dna, table, pos_gc, usage_prior, rng)
                        for _ in range(job.n_simulations)],
+        "flat_acgu": [_flat_acgu(length, overall_acgu, rng)
+                      for _ in range(job.n_simulations)],
+        "positional_acgu": [_positional_acgu_sample(n_codons, pos_acgu, rng)
+                            for _ in range(job.n_simulations)],
     }
     rows = [
         {
@@ -295,7 +378,7 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
         wt_mfe = float(wt_mfe_row.iloc[0])
         wt_dms = float(wt_dms_row.iloc[0]) if not wt_dms_row.empty else float("nan")
         wt_dms_full = float(wt_dms_full_row.iloc[0]) if not wt_dms_full_row.empty else float("nan")
-        for pool in ("flat_gc", "positional_gc", "synonymous"):
+        for pool in ("flat_gc", "flat_acgu", "positional_gc", "positional_acgu", "synonymous"):
             pool_vals = g[g["Pool"] == pool]["MFE_kcal_per_mol"].values.astype(float)
             if len(pool_vals) == 0:
                 continue

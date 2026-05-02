@@ -140,8 +140,14 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         ax.relim(); ax.autoscale_view()
         _shade_concordance(ax, x, z_mfe, z_div)
 
-        ax.legend(loc="lower right", fontsize=9, ncol=3, framealpha=0.85,
-                   borderpad=0.5)
+        # Custom placement: the cotrans bottom panel already carries the
+        # shared X-axis label of the 4-panel stack, so the standard
+        # `legend_outside(..., position="bottom")` collides with it. Push
+        # the legend below the X-axis label.
+        ax.legend(
+            loc="upper center", bbox_to_anchor=(0.5, -0.36),
+            fontsize=9, ncol=4, frameon=False, borderaxespad=0.0,
+        )
         ax.set_ylabel("Z-score\n(smoothed Δ)", fontsize=LABEL_FONTSIZE - 1)
     style_axis(ax)
 

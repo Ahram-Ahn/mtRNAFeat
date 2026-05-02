@@ -12,7 +12,13 @@ import pandas as pd
 import seaborn as sns
 
 from mtrnafeat.constants import PALETTE
-from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
+from mtrnafeat.viz.style import (
+    LABEL_FONTSIZE,
+    TITLE_FONTSIZE,
+    apply_theme,
+    legend_outside,
+    style_axis,
+)
 
 
 def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, dpi: int = 300) -> Path:
@@ -68,10 +74,11 @@ def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, 
             ax.plot([sim_count + 0.1, sim_count + dms_count - 0.1], [-1.0, -1.0],
                      color="black", lw=2.5, clip_on=False)
 
-        ax.set_title(f"{species} Structural Elements: Enrichment Landscape",
+        ax.set_title(f"{species} Structural Elements:\nEnrichment Landscape",
                       fontsize=TITLE_FONTSIZE, pad=60, weight="bold")
         ax.set_xlabel("")
         ax.set_ylabel("Element size (nt / bp)", fontsize=LABEL_FONTSIZE)
+    fig.subplots_adjust(wspace=0.45, top=0.78)
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
     return Path(out_path)
@@ -146,9 +153,10 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
             handles, labels = ax.get_legend_handles_labels()
             handles.insert(0, Patch(facecolor=base_color, alpha=0.5, label="Simulated Landscape"))
             labels.insert(0, "Simulated Landscape")
-            ax.legend(handles, labels, loc="upper right", fontsize=11, framealpha=0.9)
+            legend_outside(ax, handles=handles, labels=labels, position="bottom",
+                           fontsize=11, frameon=False, ncol=2)
         elif not exp_sub.empty:
-            ax.legend(loc="upper right", fontsize=11, framealpha=0.9)
+            legend_outside(ax, position="bottom", fontsize=11, frameon=False, ncol=2)
         ax.set_xlim(*x_lim)
         ax.set_ylim(*y_lim)
         ax.margins(x=0.10, y=0.12)
@@ -226,8 +234,8 @@ def span_boxplot(df_spans: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
         ax.set_title(f"{sp}", fontsize=TITLE_FONTSIZE, pad=10)
         ax.grid(True, which="both", linestyle=":", linewidth=0.5, alpha=0.4)
         ax.set_axisbelow(True)
-        ax.legend(loc="lower right", fontsize=10, framealpha=0.92,
-                   title="Source", title_fontsize=10)
+        legend_outside(ax, position="right", fontsize=10, frameon=False,
+                       title="Source", title_fontsize=10)
         style_axis(ax)
 
     fig.suptitle("Base-pairing distance distribution — Sim vs DMS-probed",

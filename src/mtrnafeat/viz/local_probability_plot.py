@@ -20,6 +20,7 @@ from mtrnafeat.viz.style import (
     TITLE_FONTSIZE,
     add_region_track,
     apply_theme,
+    legend_outside,
     style_axis,
 )
 
@@ -75,9 +76,7 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         fontsize=TITLE_FONTSIZE - 1,
         pad=12,
     )
-    leg = ax.legend(loc="upper right", fontsize=10, frameon=True, framealpha=0.9)
-    leg.get_frame().set_edgecolor("#888888")
-    leg.get_frame().set_linewidth(0.7)
+    legend_outside(ax, position="right", fontsize=10, frameon=False)
     style_axis(ax)
 
     # Architecture bar

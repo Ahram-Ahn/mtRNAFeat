@@ -6,6 +6,40 @@ per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Substitution KDE panels: WT vertical lines could fall off the
+  auto-scaled x-axis** when the wild-type ΔG was far from the null
+  pool's mean (e.g. yeast ATP9: WT_MFE = −68.9 kcal/mol vs pool means
+  near −38). The KDE x-limits are now expanded explicitly to include
+  both WT lines so the WT-vs-pool comparison is visible for every
+  gene.
+
+### Changed
+
+- **`window` plot now shows two traces, not three.** The
+  unconstrained ``Vienna full`` trace is computed and stored in the
+  per-position CSV but no longer plotted; for long mRNAs the
+  configured ``max_bp_span`` (default 300 nt) already captures every
+  realistic contact. The legend title became "DMS vs <engine>" so the
+  comparison reads directly.
+- **`tis` plot refactored.** X-tick labels are now a single line
+  (just the gene name with a ``*`` suffix when the 5'UTR was
+  truncated); the per-gene 5'UTR length moved to a small italic
+  annotation under the bar group instead of being baked into the
+  tick label. Legend wording shortened ("DMS-derived",
+  "Vienna prediction", "* 5'UTR truncated", "ΔG = 0").
+- **`cofold` plot replaces the per-gene heatmap grid with a single
+  per-species strip plot** of |CoFold − DMS| across the (α, τ) sweep.
+  Genes are sorted by best-fit gap; each gene's dots are colored by
+  τ; a red ring marks the best-fit dot per gene; a black square marks
+  the published-default α=0.5 / τ=640. The full sweep is still in
+  ``cofold_grid.csv`` for users who want the (α, τ) surface. Filename
+  changed: ``cofold_gap_heatmap_{species}.{ext}`` →
+  ``cofold_gap_strip_{species}.{ext}``. The
+  ``gap_heatmap_panels`` Python entry-point is kept as a backward
+  alias for ``gap_strip_panels``.
+
 ## [0.2.0] — 2026-05-01
 
 Phase 1 of the realignment toward a careful downstream analysis layer
@@ -15,6 +49,19 @@ terminology. No analysis-stage outputs change in this release.
 
 ### Added
 
+- **Two new substitution null pools, `flat_acgu` and `positional_acgu`,**
+  that preserve the full A/C/G/T frequency vector (and per-codon-position
+  variant of it) instead of pooling G with C and A with T. Critical for
+  transcripts with marked nucleotide-pair asymmetry — e.g. human ND6
+  (L-strand) has G≈191 vs C≈37, which the overall-GC null hides
+  entirely. Existing `flat_gc`, `positional_gc`, and `synonymous` pools
+  are unchanged; the new pools draw from the same RNG after the
+  existing pools so historical bit-stable outputs are preserved.
+- **`viz.style.legend_outside()`** — shared helper that places legends
+  outside the data axes (right / bottom / top) so they never occlude
+  plotted data. Replaces ad-hoc `loc="best"` and `loc="upper right"`
+  calls in `substitution`, `features`, `local_probability`, `cofold`,
+  and `cotrans` plots.
 - **`mtrnafeat doctor`** — environment diagnostics command. Reports
   Python version, ViennaRNA importability, RNAplfold and RNAstructure
   availability (the latter conditionally `ERROR` when
@@ -33,6 +80,18 @@ terminology. No analysis-stage outputs change in this release.
 
 ### Changed
 
+- **Substitution `Pool` enum gained `flat_acgu` and `positional_acgu`
+  values.** The CSV schema is unchanged (still long-format with `Pool`
+  column); per-gene Z-heatmaps and KDE panels now show 5 pools instead
+  of 3.
+- **Plot legends are now placed outside the data axes** for every
+  figure that would otherwise occlude plotted content
+  (`substitution_kde_panels_*`, `phase_space_contour`, `span_boxplot`,
+  `local_probability_*`, `cofold_per_window_corr_*`, `cotrans_*`).
+  Plots that already used `bbox_to_anchor` (window, tis, landscape,
+  kinetic, gene-panel) are unchanged. The two-species heatmap title
+  in `heatmap_size_ratios` no longer overlaps thanks to a `\n` line
+  break and explicit `subplots_adjust`.
 - Documentation now refers to the `.db` dot-brackets as
   **DMS-derived** or **DMS-constrained model** rather than
   **"ground truth"**, reflecting that these structures are model

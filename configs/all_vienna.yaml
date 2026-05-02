@@ -1,0 +1,49 @@
+# Same as configs/all.yaml but with fold_engine forced to ViennaRNA so the
+# `window` stage runs without an RNAstructure DATAPATH. Use this when
+# RNAstructure isn't installed or DATAPATH is unset.
+seed: 42
+data_dir: data
+outdir: runs/all
+
+db_files:
+  Human: human_mt-mRNA_all.db
+  Yeast: yeast_mt-mRNA_all.db
+alignment_file: PAL2NL_aa-dna_alignment_yeast_human.txt
+
+target_genes:
+  - COX1
+  - COX2
+  - COX3
+  - CYTB
+  - COB
+  - ATP86
+  - ATP9
+  - ND1
+  - ND2
+  - ND3
+  - ND4L4
+  - ND5
+  - ND6
+  - VAR1
+
+# Simulation defaults are the canonical values from all.yaml.
+sim_seq_length: 150
+sim_num_sequences: 1500
+gradient_steps: 21
+gradient_seqs_per_step: 200
+n_shuffles: 200
+
+window_nt: 120
+step_nt: 10
+max_bp_span: 300
+
+cofold_alpha: 0.5
+cofold_tau: 640.0
+fold_engine: vienna
+
+substitution_n_simulations: 200
+substitution_max_nt: 300
+
+n_workers: 4
+dpi: 200
+plot_format: png

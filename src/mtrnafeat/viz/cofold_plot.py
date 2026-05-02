@@ -1,8 +1,17 @@
-"""CoFold parameter-sweep figures: per-gene heatmaps + per-window correlation curves.
+"""CoFold parameter-sweep figures.
 
-One figure per species (Human / Yeast). Mixing species in a single grid was
-visually noisy because each species's mt-genes have very different gene-length
-distributions and thus very different |CoFold − DMS| magnitudes.
+Two outputs per species (Human / Yeast):
+
+1. ``cofold_gap_strip_{species}`` — strip plot of |CoFold − DMS| with one
+   dot per (α, τ) sweep cell, grouped by gene. Replaces the prior
+   per-gene heatmap grid, which was visually busy and made it hard to
+   compare genes against each other. The strip plot trades the (α, τ)
+   surface detail (still in the CSV: ``cofold_grid.csv``) for a compact
+   cross-gene summary that's easier to read in a paper.
+2. ``cofold_per_window_corr_{species}`` — per-gene Pearson r curves
+   between CoFold ΔG and DMS-eval ΔG across the α grid, one line per τ.
+   Unchanged from the prior layout; the heatmap was the noisy figure,
+   not this one.
 """
 from __future__ import annotations
 
@@ -13,54 +22,91 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
+from mtrnafeat.viz.style import (
+    LABEL_FONTSIZE,
+    TITLE_FONTSIZE,
+    apply_theme,
+    legend_outside,
+    style_axis,
+)
 
 _SPECIES_ORDER = ["Human", "Yeast"]
 
 
-def _gap_grid_for_species(species_full: pd.DataFrame, species: str,
-                            out_path: Path, dpi: int) -> Path:
+def _gap_strip_for_species(species_full: pd.DataFrame, species: str,
+                           out_path: Path, dpi: int) -> Path:
+    """Strip plot: x=gene (sorted by best gap), y=|CoFold − DMS|, hue=τ.
+
+    The best-fit dot per gene gets a red ring so the eye lands on it
+    without needing a heatmap. The default CoFold parameters
+    (α = 0.5, τ = 640) get a black square outline so the user can see
+    how far from optimal the published defaults sit on each gene.
+    """
     apply_theme()
     if species_full.empty:
         return out_path
-    genes = sorted(species_full["Gene"].unique())
-    n = len(genes)
-    cols = min(4, n)
-    rows = math.ceil(n / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(4.0 * cols, 3.4 * rows), squeeze=False)
-    for ax in axes.flat[n:]:
-        ax.axis("off")
-    for ax, gene in zip(axes.flat, genes):
-        sub = species_full[species_full["Gene"] == gene].copy()
-        pivot = sub.pivot_table(index="alpha", columns="tau", values="Abs_Gap")
-        pivot = pivot.sort_index(ascending=False)
-        sns.heatmap(pivot, ax=ax, cmap="viridis_r", annot=True, fmt=".2f",
-                    cbar_kws={"label": "|CoFold − DMS| (kcal/mol)"}, linewidths=0.4)
-        valid = sub.dropna(subset=["Abs_Gap"])
-        if not valid.empty:
-            best = valid.sort_values("Abs_Gap").iloc[0]
-            try:
-                row_idx = pivot.index.get_loc(best["alpha"])
-                col_idx = pivot.columns.get_loc(best["tau"])
-                ax.add_patch(plt.Rectangle((col_idx, row_idx), 1, 1, fill=False,
-                                             edgecolor="red", lw=2.0))
-            except Exception:
-                pass
-        ax.set_title(gene, fontsize=TITLE_FONTSIZE - 3)
-        ax.set_xlabel("τ — decay constant (nt)", fontsize=LABEL_FONTSIZE - 2)
-        ax.set_ylabel("α — penalty strength (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
-    fig.suptitle(f"{species} — CoFold parameter sweep, gap to DMS-eval ΔG (red = best)\n"
-                 "f(d) = α · (1 − exp(−d / τ));  α = asymptotic penalty,  τ = distance where penalty ≈ 0.63·α",
-                 fontsize=TITLE_FONTSIZE - 2, y=1.01)
+    df = species_full.dropna(subset=["Abs_Gap"]).copy()
+    if df.empty:
+        return out_path
+    gene_order = (df.groupby("Gene")["Abs_Gap"].min()
+                    .sort_values().index.tolist())
+    df["Gene"] = pd.Categorical(df["Gene"], categories=gene_order, ordered=True)
+    df = df.sort_values(["Gene", "tau", "alpha"])
+
+    width = max(7.5, 0.85 * len(gene_order) + 3.5)
+    fig, ax = plt.subplots(figsize=(width, 5.6))
+
+    sns.stripplot(
+        data=df, x="Gene", y="Abs_Gap", hue="tau",
+        palette="plasma", size=6.5, alpha=0.85, jitter=0.18,
+        dodge=False, ax=ax,
+    )
+
+    best_per_gene = df.loc[df.groupby("Gene", observed=True)["Abs_Gap"].idxmin()]
+    ax.scatter(
+        best_per_gene["Gene"].astype(str),
+        best_per_gene["Abs_Gap"].to_numpy(),
+        s=210, facecolor="none", edgecolor="#D62728", linewidth=2.0,
+        zorder=10, label="best (α, τ)",
+    )
+
+    default_mask = (df["alpha"].round(3) == 0.5) & (df["tau"].round(0) == 640)
+    if default_mask.any():
+        defaults = df.loc[default_mask]
+        ax.scatter(
+            defaults["Gene"].astype(str),
+            defaults["Abs_Gap"].to_numpy(),
+            s=120, facecolor="none", edgecolor="#222222",
+            marker="s", linewidth=1.4, zorder=9,
+            label="default (α=0.5, τ=640)",
+        )
+
+    ax.set_xlabel("Gene  (sorted by best |gap|)", fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel("|CoFold − DMS|  ΔG gap (kcal/mol)", fontsize=LABEL_FONTSIZE)
+    ax.set_title(
+        f"{species} — CoFold parameter-sweep gap to DMS-eval ΔG",
+        fontsize=TITLE_FONTSIZE - 1, pad=10, fontweight="bold",
+    )
+    plt.setp(ax.get_xticklabels(), rotation=25, ha="right")
+    ax.grid(True, axis="y", linestyle=":", linewidth=0.6, alpha=0.4)
+    ax.set_axisbelow(True)
+    legend_outside(
+        ax, position="right", fontsize=9, frameon=False,
+        title="τ — decay (nt) /\noverlay markers",
+    )
+    style_axis(ax)
     fig.tight_layout()
-    fig.savefig(out_path, dpi=dpi)
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return out_path
 
 
-def gap_heatmap_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
-                        dpi: int = 300) -> list[Path]:
-    """Per-gene |CoFold − DMS| heatmap, one figure per species."""
+def gap_strip_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
+                     dpi: int = 300) -> list[Path]:
+    """Per-species strip plot of |CoFold − DMS| across the (α, τ) sweep.
+
+    Replaces the previous per-gene heatmap grid (``gap_heatmap_panels``).
+    """
     if full.empty:
         return []
     out_dir = Path(out_dir)
@@ -71,10 +117,15 @@ def gap_heatmap_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
         species_present = sorted(full["Species"].unique())
     paths = []
     for sp in species_present:
-        out_path = out_dir / f"cofold_gap_heatmap_{sp.lower()}.{fmt}"
-        _gap_grid_for_species(full[full["Species"] == sp], sp, out_path, dpi)
+        out_path = out_dir / f"cofold_gap_strip_{sp.lower()}.{fmt}"
+        _gap_strip_for_species(full[full["Species"] == sp], sp, out_path, dpi)
         paths.append(out_path)
     return paths
+
+
+# Backwards-compatible alias so callers (cofold command, run-all
+# pipeline) don't break during the rename.
+gap_heatmap_panels = gap_strip_panels
 
 
 def _corr_grid_for_species(species_win: pd.DataFrame, species: str,
@@ -86,7 +137,8 @@ def _corr_grid_for_species(species_win: pd.DataFrame, species: str,
     n = len(genes)
     cols = min(4, n)
     rows = math.ceil(n / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(4.4 * cols, 3.4 * rows), squeeze=False)
+    # Wider per-panel allowance so the outside τ-legend doesn't squeeze the data axis.
+    fig, axes = plt.subplots(rows, cols, figsize=(6.0 * cols, 3.4 * rows), squeeze=False)
     for ax in axes.flat[n:]:
         ax.axis("off")
     taus = sorted(species_win["tau"].unique())
@@ -102,7 +154,8 @@ def _corr_grid_for_species(species_win: pd.DataFrame, species: str,
         ax.set_ylabel("Pearson r (CoFold vs DMS)", fontsize=LABEL_FONTSIZE - 2)
         ax.set_title(gene, fontsize=TITLE_FONTSIZE - 3)
         style_axis(ax)
-        ax.legend(fontsize=8, loc="best", ncol=2, title="τ — decay (nt)", title_fontsize=8)
+        legend_outside(ax, position="right", fontsize=8, frameon=False,
+                       title="τ — decay (nt)", title_fontsize=8)
     fig.suptitle(f"{species} — CoFold parameter sweep, per-window correlation with DMS ΔG\n"
                  "f(d) = α · (1 − exp(−d / τ));  larger α → stronger long-range penalty,  larger τ → penalty kicks in only at long distance",
                  fontsize=TITLE_FONTSIZE - 2, y=1.01)

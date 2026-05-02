@@ -31,7 +31,7 @@ deep dive.
 - **stats** — per-transcript length, MFE, foldedness, GC%, paired-pair composition.
 - **landscape** — simulated GC-gradient (empirical + symmetric-GC nulls) against the experimental DMS overlay.
 - **features** — element decomposition, region-stratified heatmaps, phase-space contour, base-pairing-distance ECDFs.
-- **window** — whole-transcript fold-and-compare trace per gene (DMS vs Vienna full vs max-bp-span fold; `--engine vienna|rnastructure`).
+- **window** — whole-transcript fold-and-compare trace per gene (DMS-derived vs configured-span engine fold; `--engine vienna|rnastructure`).
 - **local-probability** — ViennaRNA RNAplfold per-position pair-probability track per gene.
 - **significance** — per-gene dinucleotide-shuffle z-scores; optional per-gene cotranscriptional / sliding scan with peak detection.
 - **tis** — TIS −50/+50 nt zoom; honors 5'UTR when present, clamps at the 5'-end when not.
@@ -239,7 +239,7 @@ constraints is still a model.
 | [significance](docs/STAGES.md#significance) | dinuc-shuffle z-scores (+ optional cotrans scan) | `significance/z_per_gene.csv`, `cotrans_per_window.csv` (with `--scan`) |
 | [tis](docs/STAGES.md#tis) | −50/+50 nt TIS zoom | `tis/tis_dms_vs_mfe.csv`, `tis_zoom_grid.svg` |
 | [substitution](docs/STAGES.md#substitution) | synonymous-recoding ΔG perm test (Vienna MFE) | `substitution/substitution_thermo_distribution.csv`, `tables/substitution_thermo_summary.csv` |
-| [cofold](docs/STAGES.md#cofold) | CoFold (α, τ) sweep | `cofold/cofold_best_per_gene.csv`, `cofold_grid.csv`, per-species heatmaps |
+| [cofold](docs/STAGES.md#cofold) | CoFold (α, τ) sweep | `cofold/cofold_best_per_gene.csv`, `cofold_grid.csv`, per-species |gap| strip plot |
 | [compare](docs/STAGES.md#compare) | yeast↔human COX1 comparative | `compare/cox1_alignment_table.csv`, `cox1_substitution_heatmap.svg`, `cox1_directional_flux_heatmap.svg` |
 | [gene-panel](docs/STAGES.md#gene-panel) | per-gene composition + architecture | `gene_panels/panel_{species}_{gene}.svg` |
 | [kinetic](docs/STAGES.md#kinetic) | DrTransformer kinetic folding (opt-in) | `kinetic/kinetic_summary.csv`, per-gene trajectory plots |
@@ -282,7 +282,7 @@ runs/<your-run>/
 ├── significance/        z_per_gene.csv (+ cotrans_per_window.csv and per-gene plots when --scan)
 ├── tis/                 TIS −50/+50 zoom CSV + plot
 ├── substitution/        permutation distribution CSV + per-species KDE panels + per-species z heatmap
-├── cofold/              (α, τ) sweep grid + per-gene heatmaps + per-window correlation curves
+├── cofold/              (α, τ) sweep grid + per-species |gap| strip plot + per-window correlation curves
 ├── compare/             COX1 alignment table, substitution heatmap, directional-flux heatmap
 ├── gene_panels/         one panel figure per (species, gene)
 ├── kinetic/             DrTransformer summary + per-gene trajectory plots (only if you ran `kinetic`)

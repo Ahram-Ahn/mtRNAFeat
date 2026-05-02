@@ -1,15 +1,19 @@
 """Whole-transcript paired-fraction plot for the `window` command.
 
 Publication-quality two-panel layout. Panels share the x-axis (transcript
-position) and the legend lives **outside** the data axis so the three
-traces (DMS / Vienna full / engine-span) are never occluded.
+position) and the legend lives **outside** the data axis.
 
-* **Top** — rolling paired-fraction track (centered window, default 25 nt).
-  Three lines: DMS-guided structure, Vienna full, and the max-bp-span
-  fold. ΔG values appear next to each label so the figure reads on its
-  own.
+* **Top** — rolling paired-fraction track (centered window, default
+  25 nt). Two lines: the DMS-guided structure and a thermodynamic
+  prediction at the configured max-bp-span (default 300 nt). The
+  full-length Vienna fold without a max-bp-span cap was previously
+  shown as a third trace; it added clutter without information for
+  long mRNAs (max_bp_span = 300 already captures every realistic
+  contact at this scale) and has been removed. ΔG values appear next
+  to each label so the figure reads on its own.
 * **Bottom** — transcript architecture bar (5'UTR / CDS / 3'UTR) with
-  consistent region labels (inside wide bands, leader-lined when narrow).
+  consistent region labels (inside wide bands, leader-lined when
+  narrow).
 * **Right margin** — legend, drawn in its own figure-coordinate slot so
   no plot real-estate is overlapped at any window size.
 """
@@ -56,7 +60,6 @@ def plot_transcript_pairing(res, pos_df: pd.DataFrame, out_path: Path,
     engine_color = _engine_color(res.engine)
 
     dms_col = "DMS_RollingPairedFrac"
-    vfull_col = "ViennaFull_RollingPairedFrac"
     espan_col = f"{eng}Span{span}_RollingPairedFrac"
 
     n = len(res.sequence)
@@ -76,21 +79,14 @@ def plot_transcript_pairing(res, pos_df: pd.DataFrame, out_path: Path,
         x, pos_df[dms_col],
         color=PALETTE.get("DMS", "#1F77B4"),
         lw=LINEWIDTH,
-        label=f"DMS-guided\n  ΔG = {res.dms_recalc_mfe:,.1f} kcal/mol",
-    )
-    ax.plot(
-        x, pos_df[vfull_col],
-        color=PALETTE.get("Vienna", "#D62728"),
-        lw=LINEWIDTH * 0.9,
-        alpha=0.95,
-        label=f"Vienna full (no max-bp-span cap)\n  ΔG = {res.vienna_full_mfe:,.1f} kcal/mol",
+        label=f"DMS-derived  (ΔG = {res.dms_recalc_mfe:,.1f} kcal/mol)",
     )
     ax.plot(
         x, pos_df[espan_col],
         color=engine_color,
         lw=LINEWIDTH * 0.9,
         alpha=0.95,
-        label=f"{eng} max-bp-span = {span} nt\n  ΔG = {res.engine_span_mfe_native:,.1f} kcal/mol",
+        label=f"{eng} prediction  (ΔG = {res.engine_span_mfe_native:,.1f} kcal/mol)",
     )
 
     ax.set_ylim(-0.02, 1.02)
@@ -110,13 +106,11 @@ def plot_transcript_pairing(res, pos_df: pd.DataFrame, out_path: Path,
     # figure coords because we constrained gs.right to 0.78.
     leg = fig.legend(
         loc="upper left", bbox_to_anchor=(0.79, 0.88),
-        frameon=True, framealpha=0.95,
+        frameon=False,
         fontsize=LEGEND_FONTSIZE, borderpad=0.7, handlelength=2.4,
-        labelspacing=0.9, title="Folding source",
+        labelspacing=0.9, title=f"DMS vs {eng}",
         title_fontsize=LEGEND_FONTSIZE,
     )
-    leg.get_frame().set_edgecolor("#888888")
-    leg.get_frame().set_linewidth(0.7)
     style_axis(ax)
 
     add_region_track(

@@ -19,11 +19,19 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
+from mtrnafeat.viz.style import (
+    LABEL_FONTSIZE,
+    TITLE_FONTSIZE,
+    apply_theme,
+    legend_outside,
+    style_axis,
+)
 
 _POOL_COLORS = {
     "flat_gc": "#FF7F0E",
+    "flat_acgu": "#D62728",
     "positional_gc": "#1F77B4",
+    "positional_acgu": "#9467BD",
     "synonymous": "#2CA02C",
 }
 _SPECIES_ORDER = ["Human", "Yeast"]
@@ -42,7 +50,9 @@ def _kde_for_species(species_dist: pd.DataFrame, species: str,
         return out_path
     cols = min(4, n)
     rows = math.ceil(n / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(4.2 * cols, 3.2 * rows), squeeze=False)
+    # Wider per-panel allowance so the outside legend (5 pools + 2 WT lines)
+    # doesn't squeeze the data axis.
+    fig, axes = plt.subplots(rows, cols, figsize=(6.4 * cols, 3.4 * rows), squeeze=False)
     for ax in axes.flat[n:]:
         ax.axis("off")
     for ax, gene in zip(axes.flat, genes):
@@ -66,7 +76,17 @@ def _kde_for_species(species_dist: pd.DataFrame, species: str,
         ax.set_xlabel(r"$\Delta$G (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
         ax.set_ylabel("density", fontsize=LABEL_FONTSIZE - 2)
         style_axis(ax)
-        ax.legend(fontsize=8, loc="best")
+        # Ensure both WT vertical lines fall inside the visible x-range.
+        # KDE auto-xlim is dominated by the null pools and can be far from
+        # the WT (e.g. yeast ATP9: WT_MFE = -68.9 vs pool means around -38).
+        x0, x1 = ax.get_xlim()
+        wt_xs = [v for v in (wt_mfe, wt_dms) if v is not None and np.isfinite(v)]
+        if wt_xs:
+            x0 = min(x0, min(wt_xs))
+            x1 = max(x1, max(wt_xs))
+            pad = 0.05 * (x1 - x0)
+            ax.set_xlim(x0 - pad, x1 + pad)
+        legend_outside(ax, position="right", fontsize=8, frameon=False)
     fig.suptitle(f"{species} — substitution-thermodynamic permutation test (Vienna MFE)\n"
                  "DMS ΔG = Vienna eval_structure on the .db dot-bracket (header MFE not used)",
                  fontsize=TITLE_FONTSIZE - 2, y=1.01)
@@ -107,12 +127,15 @@ def _zheat_for_species(sub_summary: pd.DataFrame, species: str,
     pivot = sub_summary.pivot_table(
         index="Gene", columns="Pool", values="Z_WT_MFE_vs_Pool"
     )
-    pivot = pivot.reindex(columns=["flat_gc", "positional_gc", "synonymous"])
-    fig, ax = plt.subplots(figsize=(6, max(3.0, 0.35 * len(pivot))))
+    pool_order = ["flat_gc", "flat_acgu", "positional_gc", "positional_acgu", "synonymous"]
+    pivot = pivot.reindex(columns=pool_order)
+    # Wider figure to fit the title comfortably; minimum height keeps the
+    # heatmap readable even for one-gene smoke runs.
+    fig, ax = plt.subplots(figsize=(10.0, max(4.0, 0.45 * len(pivot) + 2.5)))
     sns.heatmap(pivot, ax=ax, cmap="RdBu_r", center=0, annot=True, fmt=".2f",
-                cbar_kws={"label": "Z(WT_MFE − Pool)"}, linewidths=0.4)
+                cbar_kws={"label": "Z(WT_MFE − Pool)", "pad": 0.02}, linewidths=0.4)
     ax.set_title(f"{species} — Wild-type Vienna ΔG vs synonymous-recoding null pools",
-                 fontsize=TITLE_FONTSIZE - 2, pad=10)
+                 fontsize=TITLE_FONTSIZE - 2, pad=12)
     ax.set_xlabel("Null pool", fontsize=LABEL_FONTSIZE)
     ax.set_ylabel("Gene", fontsize=LABEL_FONTSIZE)
     fig.tight_layout()

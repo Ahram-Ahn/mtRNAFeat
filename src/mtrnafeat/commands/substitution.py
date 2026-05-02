@@ -1,12 +1,16 @@
 """`mtrnafeat substitution` — synonymous-recoding thermodynamic permutation test.
 
-Promoted from `legacy/base_substitution/03.*`. Three null pools per gene
-(flat-GC, positional-GC, synonymous) compared against the wild-type ΔG
-under plain ViennaRNA MFE — apples-to-apples vs the wild-type Vienna
-fold. The dedicated `cofold` stage handles the soft-penalty exploration
-separately. Emits the long-format distribution CSV in `substitution/`,
-the per-gene summary CSV in `tables/`, and per-species KDE + Z-heatmap
-figures in `substitution/`.
+Promoted from `legacy/base_substitution/03.*`. Five null pools per gene
+(flat-GC, flat-ACGU, positional-GC, positional-ACGU, synonymous)
+compared against the wild-type ΔG under plain ViennaRNA MFE —
+apples-to-apples vs the wild-type Vienna fold. The ACGU variants
+generalize the GC pools by tracking each nucleotide independently,
+which matters when G and C (or A and U) frequencies are asymmetric
+(e.g. human ND6 has G=191 vs C=37 on the L-strand). The dedicated
+`cofold` stage handles the soft-penalty exploration separately. Emits
+the long-format distribution CSV in `substitution/`, the per-gene
+summary CSV in `tables/`, and per-species KDE + Z-heatmap figures in
+`substitution/`.
 
 Args (after `--`):
     --n INT          override cfg.substitution_n_simulations (default: 200)

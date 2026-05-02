@@ -265,3 +265,41 @@ def species_legend_handles(species: list[str]) -> list[Line2D]:
                     markerfacecolor=PALETTE.get(sp, "black"),
                     markersize=11, markeredgecolor="black", label=sp)
             for sp in species]
+
+
+def legend_outside(ax_or_fig, *, position: str = "right", **kw):
+    """Place a legend outside the axes / figure data area.
+
+    Standardizes how the package places legends so they never occlude
+    plotted data. Replaces ad-hoc `loc="best"` / `loc="upper right"`
+    calls inside data axes.
+
+    Parameters
+    ----------
+    ax_or_fig
+        A matplotlib `Axes` or `Figure`. The legend is attached to it
+        directly via the same `.legend()` API.
+    position
+        `"right"` → legend just to the right of the axes (default).
+        `"bottom"` → legend below the axes (centered, single row).
+        `"top"` → legend above the axes (centered, single row).
+    **kw
+        Forwarded to `.legend()` (e.g. `title=...`, `ncol=...`,
+        `frameon=...`). `loc` and `bbox_to_anchor` are set by this
+        helper and should not be passed.
+
+    Returns
+    -------
+    matplotlib.legend.Legend
+    """
+    kw.pop("loc", None)
+    kw.pop("bbox_to_anchor", None)
+    if position == "right":
+        kw.setdefault("borderaxespad", 0.0)
+        return ax_or_fig.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), **kw)
+    if position == "bottom":
+        kw.setdefault("ncol", kw.pop("_ncol_default", 4))
+        return ax_or_fig.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), **kw)
+    if position == "top":
+        return ax_or_fig.legend(loc="lower center", bbox_to_anchor=(0.5, 1.02), **kw)
+    raise ValueError(f"position must be 'right', 'bottom', or 'top'; got {position!r}")
