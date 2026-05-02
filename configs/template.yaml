@@ -113,6 +113,17 @@ rnaplfold_window: 80
 rnaplfold_max_bp_span: 50
 rnaplfold_cutoff: 0.001
 
+# local-probability DMS-agreement outputs. The per-position track is
+# windowed (sliding) into mean RNAplfold P(paired) vs DMS-derived paired
+# fraction; the TIS summary computes a circular-shift empirical p-value
+# (preserves autocorrelation; no refolding) for "is the start region
+# unusually open relative to CDS background?".
+local_probability_scan_window_nt: 120
+local_probability_scan_step_nt: 10
+tis_upstream_nt: 50
+tis_downstream_nt: 50
+tis_n_circular_shifts: 1000
+
 # Sliding-window length / step (nt). The current `window` command folds
 # the whole transcript and does not slide; these fields are still read by
 # the `cofold` per-window correlation pass and the `significance --scan`

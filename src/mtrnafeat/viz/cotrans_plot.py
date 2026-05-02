@@ -1,15 +1,20 @@
-"""Per-gene cotranscriptional / sliding-window signal plots.
+"""Per-gene local structural-change scan plot.
 
 One PNG per (species, gene): four stacked panels sharing the x-axis.
 
 * MFE / nt — energetic stability of the prefix or window
 * Ensemble diversity — Vienna's mean BP distance, an uncertainty proxy
 * Paired fraction — fraction of nt paired in the MFE structure
-* Concordance — z-scored deltas of all three, with peak markers and
-  background shading where two or more signals peak together.
+* Within-gene Z of smoothed Δ on all three, with candidate peak markers
+  and background shading where two or more signals move together.
 
-Background tinting on the concordance panel: green where MFE and diversity
-*both* drop sharply (a "structure-commits" event), red where both rise (a
+The bottom-panel Z is **not** a statistical test. It standardizes each
+gene's smoothed first differences against that same gene's distribution,
+flagging windows where the local structure prediction shifts sharply.
+For an actual null-model p-value, see ``z_per_gene.csv``.
+
+Background tinting on the Z panel: green where MFE and diversity *both*
+drop sharply (a "structure-commits" event), red where both rise (a
 "structure-loosens" event). Mirrors the legacy ``signal_analysis.py``
 shading idiom.
 """
@@ -126,9 +131,9 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
 
         # Peak markers
         for arr, sign, color, label in (
-            (z_mfe, -1, species_color, "ΔMFE peak"),
-            (z_div, -1, PALETTE.get("Diversity", "#000000"), "ΔDiv peak"),
-            (z_pf, 1, PALETTE.get("DMS", "#1F77B4"), "ΔPF peak"),
+            (z_mfe, -1, species_color, "ΔMFE candidate peak"),
+            (z_div, -1, PALETTE.get("Diversity", "#000000"), "ΔDiv candidate peak"),
+            (z_pf, 1, PALETTE.get("DMS", "#1F77B4"), "ΔPF candidate peak"),
         ):
             peaks = _peaks_in(arr, threshold=z_threshold, sign=sign)
             if peaks.size:
@@ -148,7 +153,7 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             loc="upper center", bbox_to_anchor=(0.5, -0.36),
             fontsize=9, ncol=4, frameon=False, borderaxespad=0.0,
         )
-        ax.set_ylabel("Z-score\n(smoothed Δ)", fontsize=LABEL_FONTSIZE - 1)
+        ax.set_ylabel("Within-gene Z\n(smoothed Δ)", fontsize=LABEL_FONTSIZE - 1)
     style_axis(ax)
 
     # X-axis label
@@ -171,8 +176,9 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             if arr.size
         )
     fig.suptitle(
-        f"{species} {gene} — cotranscriptional signals "
-        f"(mode={mode}, n={n_pts} samples, peak |Z|≥{z_threshold:.1f})",
+        f"{species} {gene} — local structural-change scan "
+        f"(mode={mode}, n={n_pts} windows, "
+        f"candidate peaks |within-gene Z|≥{z_threshold:.1f})",
         fontsize=TITLE_FONTSIZE - 1,
         fontweight="bold",
         y=0.995,

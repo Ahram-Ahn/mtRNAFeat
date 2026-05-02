@@ -32,8 +32,8 @@ deep dive.
 - **landscape** — simulated GC-gradient (empirical + symmetric-GC nulls) against the experimental DMS overlay.
 - **features** — element decomposition, region-stratified heatmaps, phase-space contour, base-pairing-distance ECDFs.
 - **window** — whole-transcript fold-and-compare trace per gene (DMS-derived vs configured-span engine fold; `--engine vienna|rnastructure`).
-- **local-probability** — ViennaRNA RNAplfold per-position pair-probability track per gene.
-- **significance** — per-gene dinucleotide-shuffle z-scores; optional per-gene cotranscriptional / sliding scan with peak detection.
+- **local-probability** — ViennaRNA RNAplfold per-position pair-probability track per gene, overlaid against the DMS-derived dot-bracket (smoothed paired-fraction track + signed Δ); emits per-window agreement and a TIS-vs-CDS-background summary with circular-shift empirical p-values.
+- **significance** — per-gene dinucleotide-shuffle z-score with empirical p-value (the only null-model test); optional within-gene structural-change scan flagging candidate transition peaks (within-gene Z, not a statistical test).
 - **tis** — TIS −50/+50 nt zoom; honors 5'UTR when present, clamps at the 5'-end when not.
 - **substitution** — synonymous-recoding ΔG permutation test (flat-GC / positional-GC / synonymous null pools, all folded under plain Vienna MFE so the wild-type vs pool comparison is apples-to-apples). The DMS reference ΔG is recomputed by Vienna `eval_structure` on the `.db` dot-bracket — the `.db` header MFE is intentionally bypassed.
 - **cofold** — CoFold (α, τ) parameter sweep against the DMS ΔG. CoFold is the co-transcriptional folding model of [Proctor & Meyer (2013, *NAR*)](https://academic.oup.com/nar/article/41/19/9090/2411166), which adds a soft penalty `f(d) = α · (1 − exp(−d/τ))` to every candidate base pair of sequence distance `d`. **α** (alpha, kcal/mol) is the asymptotic penalty strength — larger values discourage long-range pairs more strongly. **τ** (tau, nt) is the decay constant — the distance at which the penalty reaches `α·(1 − 1/e) ≈ 0.63·α`; small `τ` makes the penalty bite at short range, large `τ` lets short loops form freely and only penalizes truly long-range contacts. CoFold's published defaults (α = 0.5, τ = 640 nt) correspond to a transcription speed of ~50 nt/s with a ~12.8 s pairing window. The sweep grids both axes and picks the `(α, τ)` that best matches the experimental DMS ΔG per gene.
@@ -235,7 +235,7 @@ constraints is still a model.
 | [landscape](docs/STAGES.md#landscape) | GC-gradient sim + experimental overlay | `landscape/landscape_overlay.svg`, `gc_gradient.csv`, `pairing_bias_{GC,AU,GU}.svg` |
 | [features](docs/STAGES.md#features) | element decomposition + heatmaps + ECDFs | `features/raw_motifs.csv`, `heatmap_size_ratios.svg`, `phase_space_contour.svg`, `span_boxplot.svg` |
 | [window](docs/STAGES.md#window) | whole-transcript fold-and-compare trace | `window/window_{species}_{gene}.svg`, `window_per_position.csv`, `window_summary.csv` |
-| [local-probability](docs/STAGES.md#local-probability) | RNAplfold per-position pair probabilities | `local_probability/local_probability_per_position.csv`, per-gene `.svg` |
+| [local-probability](docs/STAGES.md#local-probability) | RNAplfold per-position pair probabilities + DMS overlay | `local_probability/local_probability_per_position.csv`, `local_probability_per_window.csv`, `local_probability_TIS_summary.csv`, per-gene `.svg` |
 | [significance](docs/STAGES.md#significance) | dinuc-shuffle z-scores (+ optional cotrans scan) | `significance/z_per_gene.csv`, `cotrans_per_window.csv` (with `--scan`) |
 | [tis](docs/STAGES.md#tis) | −50/+50 nt TIS zoom | `tis/tis_dms_vs_mfe.csv`, `tis_zoom_grid.svg` |
 | [substitution](docs/STAGES.md#substitution) | synonymous-recoding ΔG perm test (Vienna MFE) | `substitution/substitution_thermo_distribution.csv`, `tables/substitution_thermo_summary.csv` |
@@ -278,7 +278,7 @@ runs/<your-run>/
 ├── landscape/           gradient curves, overlay, pairing-bias plots
 ├── features/            motifs, spans, region table, heatmaps, phase-space contour, span ECDFs
 ├── window/              per-gene whole-transcript trace + per-position + summary CSVs
-├── local_probability/   per-gene RNAplfold pair-probability tracks + per-position CSV
+├── local_probability/   per-gene RNAplfold pair-probability tracks + DMS overlay (per-position, per-window, TIS summary CSVs)
 ├── significance/        z_per_gene.csv (+ cotrans_per_window.csv and per-gene plots when --scan)
 ├── tis/                 TIS −50/+50 zoom CSV + plot
 ├── substitution/        permutation distribution CSV + per-species KDE panels + per-species z heatmap

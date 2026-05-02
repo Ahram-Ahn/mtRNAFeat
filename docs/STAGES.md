@@ -202,18 +202,60 @@ strip (5'UTR / CDS / 3'UTR) below.
 ## local-probability
 
 **Purpose**. ViennaRNA's RNAplfold per-position pair-probability scan over
-each transcript. For every (species, gene), reports the local pair
-probability `p(i,j)` along the sequence — useful for spotting positions
-that are nearly always paired (high probability across the local window)
-versus positions that fluctuate or stay open. Complements the binary
-"paired vs. unpaired" picture from the `window` stage.
+each transcript, **overlaid against the DMS-derived dot-bracket from the
+matching `.db` record**. For every (species, gene), reports:
+
+* the local pair probability `P(paired)` along the sequence (sequence-only
+  thermodynamic prior);
+* the DMS-paired binary 0/1 plus a smoothed track at the same rolling
+  width — directly comparable to `P(paired)` on the same axis;
+* per-position `Δ = P(paired) − DMS_paired` smoothed signed delta;
+* a sliding-window agreement table (mean RNAplfold P(paired) vs DMS
+  paired fraction per window);
+* a one-row TIS summary per gene with TIS vs CDS-background effect sizes
+  and **circular-shift empirical p-values** for "is the start region
+  unusually open relative to its own CDS background?" (the shift
+  preserves the autocorrelation of the per-position track and avoids
+  re-folding entirely).
+
+This is the only stage that compares the RNAplfold local ensemble
+directly against the DMS-constrained model. Concordance interpretation
+is restricted to "consistent with" / "discordant"; RNAplfold P(paired)
+is **not** equivalent to DMS reactivity, and the DMS dot-bracket is a
+DMS-constrained model, not ground truth.
 
 **Reads**: `cfg.rnaplfold_window`, `cfg.rnaplfold_max_bp_span`,
-`cfg.rnaplfold_cutoff`, `cfg.rolling_window` (smoothing for the plot
-overlay), `cfg.db_files`, `cfg.target_genes`.
+`cfg.rnaplfold_cutoff`, `cfg.rolling_window` (smoothing applied to both
+RNAplfold and DMS tracks so they're on the same scale),
+`cfg.local_probability_scan_window_nt`, `cfg.local_probability_scan_step_nt`,
+`cfg.tis_upstream_nt`, `cfg.tis_downstream_nt`,
+`cfg.tis_n_circular_shifts`, `cfg.db_files`, `cfg.target_genes`,
+`cfg.seed`.
 **Writes**:
-- `local_probability/local_probability_per_position.csv` (one row per (species, gene, position) with raw and smoothed probability)
-- `local_probability/local_probability_{SPECIES}_{GENE}.{svg|png}` (one per gene)
+- `local_probability/local_probability_per_position.csv` — one row per
+  (species, gene, position) with `P_Paired`, `P_Paired_Smoothed`,
+  `DMS_Paired_Binary`, `DMS_Paired_Smoothed`,
+  `Delta_Ppaired_minus_DMS_Smoothed`, and `In_TIS_Window`. DMS columns
+  are NaN for genes whose `.db` record is absent or whose length does
+  not match the RNAplfold input.
+- `local_probability/local_probability_per_window.csv` — sliding-window
+  agreement table with `RNAplfold_Mean_Ppaired` /
+  `RNAplfold_Frac_Low_Ppaired_0p25`, `DMS_Paired_Fraction` /
+  `DMS_Mean_Pair_Span` / `DMS_Long_Pair_Fraction_gt_50`, and signed +
+  absolute Δ.
+- `local_probability/local_probability_TIS_summary.csv` — one row per
+  (species, gene) with TIS vs CDS-background effect sizes,
+  `Empirical_P_TIS_Low_*` (circular-shift one-sided P, lower is more
+  unusually open), and `TIS_Concordance_Class`
+  (`concordant_open` / `concordant_paired` / `DMS_open_only` /
+  `RNAplfold_open_only` / `discordant`). Genes with no annotation are
+  silently skipped here. The `Has_Full_Upstream_Context` flag is `False`
+  whenever the requested upstream context exceeds the actual 5'UTR
+  length — relevant for human mt-mRNAs whose 5'UTRs are 0–3 nt.
+- `local_probability/local_probability_{SPECIES}_{GENE}.{svg|png}` —
+  per-gene plot. Four panels when DMS overlay is available (RNAplfold,
+  DMS, signed Δ, architecture+TIS shading); falls back to the legacy
+  two-panel layout when DMS data is missing.
 
 **Flags (after `--`)**:
 | Flag | Type | Effect |
@@ -221,25 +263,42 @@ overlay), `cfg.db_files`, `cfg.target_genes`.
 | `--window N` | int | RNAplfold window size (default `cfg.rnaplfold_window` = 80). |
 | `--max-bp-span N` | int | RNAplfold max base-pair span (default `cfg.rnaplfold_max_bp_span` = 50). |
 | `--cutoff F` | float | RNAplfold pair-probability cutoff (default `cfg.rnaplfold_cutoff` = 0.001). |
-| `--smooth N` | int | rolling-window width for the smoothed plot overlay (default `cfg.rolling_window`). |
+| `--smooth N` | int | rolling-window width for both smoothed tracks (default `cfg.rolling_window`). |
+| `--scan-window N` | int | sliding-window size for the per-window agreement table (default `cfg.local_probability_scan_window_nt`). |
+| `--scan-step N` | int | sliding-window stride (default `cfg.local_probability_scan_step_nt`). |
+| `--tis-upstream N` | int | TIS upstream context (default `cfg.tis_upstream_nt`). |
+| `--tis-downstream N` | int | TIS downstream context (default `cfg.tis_downstream_nt`). |
+| `--tis-n-shuffles N` | int | circular-shift draws for the TIS empirical p-value (default `cfg.tis_n_circular_shifts`). |
 
-These defaults match RNAplfold's own published defaults (`-W 80 -L 50 -c 0.001`).
+The RNAplfold defaults match ViennaRNA's published defaults
+(`-W 80 -L 50 -c 0.001`).
 
 ---
 
 ## significance
 
 **Purpose**. Per-gene structural-significance with two layers, both
-restricted to `cfg.target_genes`:
+restricted to `cfg.target_genes`. **Only layer 1 is a statistical test.**
+Layer 2 is exploratory; its Z-scores are within-gene outlier scores, not
+p-values.
 
-1. **Sequence-level z-score** (always emitted, fast). Folds each whole
-   transcript and a dinucleotide-shuffled null pool (Workman & Krogh
-   1999 null), reports `Z_MFE = (observed − null_mean) / null_std`.
-2. **Per-gene cotranscriptional / sliding scan** (with `--scan`).
-   Walks the transcript in the chosen mode and tracks Vienna's MFE,
-   ensemble diversity, and paired fraction. Z-scores the first-difference
-   signals so structural rearrangement events stand out, and detects
-   peaks above `--z-threshold`.
+1. **Sequence-level z-score / null-model p-value** (always emitted, fast).
+   Folds each whole transcript and a dinucleotide-shuffled null pool of
+   size `cfg.n_shuffles` (Workman & Krogh 1999), reports
+   `Z_MFE = (observed − null_mean) / null_std` and the empirical
+   `P_Empirical = mean(null_MFE ≤ observed_MFE)`. This is the only
+   null-model-backed significance metric in the package.
+2. **Per-gene local structural-change scan** (with `--scan`). Walks the
+   transcript in the chosen mode and tracks Vienna's MFE, ensemble
+   diversity, and paired fraction. The `Z_Delta_*` columns standardize
+   each gene's smoothed first-difference signals against *that same gene's*
+   distribution to surface candidate transition windows above
+   `--z-threshold`. **Windows are not independent samples and there is
+   no null model** — these Z-scores are not p-values. Every row in
+   `cotrans_per_window.csv` is tagged with
+   `Z_score_type="within_gene_window_standardized_delta"` and
+   `Is_statistical_pvalue=False` so downstream consumers can't conflate
+   the two layers. For null-model significance, use layer 1.
 
 **Reads**: `cfg.n_shuffles`, `cfg.db_files`, `cfg.target_genes`. The
 `--scan` pass uses its own `--window`/`--step` (not the `cfg.window_nt`

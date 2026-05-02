@@ -21,6 +21,8 @@ value for that run only.
 - [Genes](#genes) — `target_genes`
 - [Window & local-probability](#window--local-probability) — `rolling_window`,
   `rnaplfold_window`, `rnaplfold_max_bp_span`, `rnaplfold_cutoff`,
+  `local_probability_scan_window_nt`, `local_probability_scan_step_nt`,
+  `tis_upstream_nt`, `tis_downstream_nt`, `tis_n_circular_shifts`,
   `window_nt`, `step_nt`, `max_bp_span`, `window_size_sweep`,
   `fold_engine`
 - [CoFold](#cofold) — `cofold_alpha`, `cofold_tau`, `cofold_alpha_sweep`,
@@ -193,6 +195,46 @@ probability` runs RNAplfold and reports a continuous pair probability.
   probability below this threshold are not reported. Matches `-c 0.001`.
 - **Used by**: `local-probability`.
 - **CLI override**: `mtrnafeat local-probability … -- --cutoff F`.
+
+### `local_probability_scan_window_nt`
+- **Type**: int · **Default**: `120`
+- **Controls**: sliding-window size (nt) for the per-window
+  RNAplfold-vs-DMS agreement table emitted by `local-probability`.
+- **Used by**: [`local-probability`](STAGES.md#local-probability).
+- **CLI override**: `mtrnafeat local-probability … -- --scan-window N`.
+
+### `local_probability_scan_step_nt`
+- **Type**: int · **Default**: `10`
+- **Controls**: stride (nt) for the same sliding-window agreement table.
+- **Used by**: `local-probability`.
+- **CLI override**: `mtrnafeat local-probability … -- --scan-step N`.
+
+### `tis_upstream_nt`
+- **Type**: int · **Default**: `50`
+- **Controls**: requested upstream (5') context (nt) around the start
+  codon for the TIS summary. Truncated to whatever 5'UTR is actually
+  annotated; the summary's `Has_Full_Upstream_Context` flag reports
+  whether truncation occurred.
+- **Used by**: `local-probability` (TIS summary).
+- **CLI override**: `mtrnafeat local-probability … -- --tis-upstream N`.
+
+### `tis_downstream_nt`
+- **Type**: int · **Default**: `50`
+- **Controls**: downstream (3') context (nt) around the start codon
+  for the TIS summary.
+- **Used by**: `local-probability` (TIS summary).
+- **CLI override**: `mtrnafeat local-probability … -- --tis-downstream N`.
+
+### `tis_n_circular_shifts`
+- **Type**: int · **Default**: `1000`
+- **Controls**: number of circular-shift draws used to compute the TIS
+  empirical p-values (`Empirical_P_TIS_Low_*`). Circular shifts
+  preserve the autocorrelation of the per-position track; the p-value
+  is one-sided (`P(shifted_mean ≤ observed_mean)`), so smaller values
+  indicate the TIS region is unusually open relative to its own
+  transcript.
+- **Used by**: `local-probability` (TIS summary).
+- **CLI override**: `mtrnafeat local-probability … -- --tis-n-shuffles N`.
 
 ### `window_nt`
 - **Type**: int · **Default**: `120`

@@ -1,17 +1,29 @@
 """`mtrnafeat significance` — per-gene structural-significance analysis.
 
-Two layers, both restricted to ``cfg.target_genes``:
+Two layers, both restricted to ``cfg.target_genes``. Only **layer 1** is
+a statistical test. Layer 2 is an exploratory within-transcript scan and
+its Z-scores are not p-values — see the note below.
 
-1. **Sequence-level z-score** (always emitted, fast). Folds each whole
-   transcript and a dinucleotide-shuffled null pool, reports
-   ``Z_MFE = (observed − null_mean) / null_std``. Output:
-   ``z_per_gene.csv``.
+1. **Sequence-level z-score / null-model p-value** (always emitted, fast).
+   Folds each whole transcript and a dinucleotide-shuffled null pool of
+   size ``cfg.n_shuffles`` (Workman & Krogh 1999). Reports
+   ``Z_MFE = (observed − null_mean) / null_std`` and the empirical
+   ``P_Empirical = mean(null_MFE ≤ observed_MFE)``. Output:
+   ``z_per_gene.csv``. **This is the only null-model-backed output of
+   this command.**
 
-2. **Per-gene cotranscriptional / sliding scan** (with ``--scan``).
+2. **Per-gene local structural-change scan** (with ``--scan``).
    For each gene, walks the transcript in the chosen mode and tracks
-   Vienna's MFE, ensemble diversity, and paired fraction. Z-scores the
-   first-difference signals so structural rearrangement events stand out.
-   Outputs one PNG per (species, gene) plus a long-form CSV.
+   Vienna's MFE, ensemble diversity, and paired fraction. The
+   ``Z_Delta_*`` columns standardize each gene's smoothed first-difference
+   signals against *that same gene's* distribution to surface candidate
+   transition windows. They are within-gene outlier scores, **not**
+   statistical p-values — windows are not independent samples and there
+   is no null model. The CSV tags every row with
+   ``Z_score_type="within_gene_window_standardized_delta"`` and
+   ``Is_statistical_pvalue=False``. For a real null-model test, use
+   layer 1's ``P_Empirical``. Outputs one PNG per (species, gene) plus
+   ``cotrans_per_window.csv``.
 
 Args (after ``--``):
     --scan                       enable the per-gene cotranscriptional scan

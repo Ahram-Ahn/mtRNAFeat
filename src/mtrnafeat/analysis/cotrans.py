@@ -201,6 +201,24 @@ def find_signal_peaks(df: pd.DataFrame, threshold: float = 2.0,
     return out
 
 
+def attach_provenance(df: pd.DataFrame) -> pd.DataFrame:
+    """Tag a cotrans frame with the kind of Z-score it contains.
+
+    The Z columns produced by ``add_z_columns`` are within-gene
+    standardized first differences, **not** null-model p-values. Stamping
+    ``Z_score_type`` and ``Is_statistical_pvalue=False`` onto every row
+    keeps downstream consumers from treating them like a hypothesis test
+    — only ``analysis.significance.per_gene_significance`` emits a
+    null-model p-value here.
+    """
+    if df.empty:
+        return df
+    out = df.copy()
+    out["Z_score_type"] = "within_gene_window_standardized_delta"
+    out["Is_statistical_pvalue"] = False
+    return out
+
+
 def per_gene_cotrans_scan(cfg: Config, params: ScanParams) -> pd.DataFrame:
     """Walk every (species, gene) in cfg.target_genes and emit a long-form
     DataFrame with all per-window signals + z-scores.
@@ -223,4 +241,4 @@ def per_gene_cotrans_scan(cfg: Config, params: ScanParams) -> pd.DataFrame:
             frames.append(sig)
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
+    return attach_provenance(pd.concat(frames, ignore_index=True))
