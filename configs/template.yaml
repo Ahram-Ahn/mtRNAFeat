@@ -146,11 +146,10 @@ cofold_tau_sweep:   [160.0, 320.0, 640.0, 1280.0, 2560.0]
 # Folding engine selector for the `window` command (other commands fold
 # unconditionally with ViennaRNA via core.thermo).
 #   "rnastructure" (default) — `Fold -md <max_bp_span>`. Matches how the
-#                              .db ground-truth dot-brackets were
-#                              produced upstream. Requires the
-#                              `RNAstructure` binary on PATH and the
-#                              DATAPATH env var pointing at its
-#                              data_tables/ directory.
+#                              .db DMS-derived dot-brackets were produced
+#                              upstream. Requires the `RNAstructure`
+#                              binary on PATH and the DATAPATH env var
+#                              pointing at its data_tables/ directory.
 #   "vienna"                  — `RNA.fold_compound` with `md.max_bp_span`.
 #                              Pure Python; no external binary needed.
 # Override per run with `mtrnafeat window -- --engine vienna|rnastructure`.

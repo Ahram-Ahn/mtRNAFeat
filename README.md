@@ -1,29 +1,33 @@
 # mtrnafeat
 
-Mitochondrial mRNA structural-feature analysis. A Python CLI that compares
-DMS-MaPseq–derived RNA secondary structures against thermodynamic predictions
-(ViennaRNA MFE, RNAstructure, RNAplfold pair probabilities, and CoFold),
-runs synonymous-recoding permutation tests against the wild-type ΔG, sweeps
-CoFold parameters, scans transcripts with sliding windows, zooms in on
-translation initiation sites, and emits a comparative yeast↔human COX1
-panel — all from a single config file.
+`mtrnafeat` is a downstream analysis toolkit for mitochondrial mRNA
+structural models. It consumes DMS-MaPseq–derived dot-bracket structures
+and pairs them with thermodynamic predictions (ViennaRNA, RNAstructure,
+RNAplfold) to help answer:
 
-The tool exists because the structural questions you ask of a
-DMS-MaPseq-probed mitochondrial mRNA aren't all answered by one analysis.
-You want a per-transcript summary, an MFE-vs-experimental landscape, an
-element decomposition, a sliding-window picture, a per-position
-pair-probability track, statistical significance under shuffled nulls, a
-TIS zoom that handles missing 5'UTRs honestly, a synonymous-recoding
-permutation test, a CoFold parameter sweep, and a cross-species
-comparative — and you want them all reproducible from one YAML config and
-one command.
+1. Which mt-mRNA regions are locally paired or accessible?
+2. Do DMS-derived structures agree with thermodynamic predictions?
+3. Are conclusions robust to folding-engine choice?
+4. Are known RNA modifications likely to confound DMS interpretation?
+5. Are coding sequences unusually structured relative to codon-aware
+   synonymous nulls?
+6. Do structural features differ by species, strand, gene, or region?
+
+It is **not** a raw FASTQ-to-reactivity pipeline, a replacement for
+ShapeMapper2 / RNA Framework / SEISMIC-RNA, a new thermodynamic folding
+algorithm, or a validated co-transcriptional folding simulator for long
+mRNAs. See [What mtrnafeat is not](#what-mtrnafeat-is-not) for the
+boundary.
 
 ## Features
 
-The pipeline ships **11 analysis stages** plus orchestration (`run-all`)
-and a re-render utility (`plot`). See [docs/STAGES.md](docs/STAGES.md)
-for the per-stage deep dive.
+The pipeline ships **11 analysis stages** plus orchestration (`run-all`),
+a re-render utility (`plot`), and two pre-flight helpers (`doctor`,
+`validate-inputs`). See [docs/STAGES.md](docs/STAGES.md) for the per-stage
+deep dive.
 
+- **doctor** — environment diagnostics (Python, ViennaRNA, RNAplfold, RNAstructure, DrTransformer).
+- **validate-inputs** — pre-flight check of config + `.db` files + annotations + optional alignment / modifications table.
 - **stats** — per-transcript length, MFE, foldedness, GC%, paired-pair composition.
 - **landscape** — simulated GC-gradient (empirical + symmetric-GC nulls) against the experimental DMS overlay.
 - **features** — element decomposition, region-stratified heatmaps, phase-space contour, base-pairing-distance ECDFs.
@@ -80,7 +84,7 @@ other stage (significance, cofold, kinetic, …) folds via ViennaRNA.
 
 | Engine | Selector (`fold_engine` YAML / `--engine` CLI) | Requires | Notes |
 |--------|------------------------------------------------|----------|-------|
-| RNAstructure | `rnastructure` (**default**) | the `RNAstructure` binary on PATH and the `DATAPATH` env var pointing at its `data_tables/` directory | matches how the upstream `.db` ground-truth dot-brackets were produced (`Fold -md 350`) |
+| RNAstructure | `rnastructure` (**default**) | the `RNAstructure` binary on PATH and the `DATAPATH` env var pointing at its `data_tables/` directory | matches how the upstream `.db` DMS-derived dot-brackets were produced (`Fold -md 350`) |
 | ViennaRNA | `vienna` | the `viennarna` Python package (already required) | `RNA.fold_compound` with `md.max_bp_span` |
 
 If you don't have RNAstructure installed, override per run with
@@ -90,6 +94,18 @@ fixture `test_data/mini.config.yaml` uses Vienna so the test suite
 doesn't need RNAstructure.
 
 ## Quickstart
+
+### 0. Sanity-check the environment and inputs
+
+```bash
+mtrnafeat doctor                                          # Python, ViennaRNA, optional binaries
+mtrnafeat validate-inputs --config configs/all.yaml       # config + .db + annotations
+```
+
+`doctor` exits non-zero only on hard failures (missing ViennaRNA, missing
+RNAstructure when `fold_engine: rnastructure`). Optional tools like
+DrTransformer are reported but never block. `validate-inputs` is similar:
+missing optional files (alignment, modifications table) are warnings.
 
 ### 1. Smoke test (under 2 minutes, no real data)
 
@@ -185,10 +201,36 @@ Subcommand-specific flags go after a literal `--`:
 mtrnafeat substitution --config configs/all.yaml --outdir runs/x -- --n 1000 --max-nt 600
 ```
 
+## Recommended workflow
+
+1. Generate DMS reactivity / DMS-constrained structures upstream
+   (e.g. ShapeMapper2 → RNAstructure `Fold -d`). `mtrnafeat` consumes
+   the resulting dot-brackets; it does not generate them.
+2. `mtrnafeat doctor` to check the environment.
+3. `mtrnafeat validate-inputs --config <your.yaml>` to catch input
+   mistakes before expensive analyses.
+4. `mtrnafeat run-all --config <your.yaml>` for the standard pipeline.
+   Inspect `local_probability/`, `window/`, and `gene_panels/` first —
+   these are the most directly interpretable outputs for long mRNAs.
+5. Run extended modules (`substitution`, `cofold`) if their assumptions
+   suit your question; treat their outputs as exploratory until
+   validated.
+6. Treat `kinetic` (DrTransformer) and `cofold` parameter sweeps as
+   exploratory: they are parameter-sensitive and not validated for long
+   mature mt-mRNAs.
+
+A note on terminology: `.db` dot-brackets are **DMS-derived /
+DMS-constrained models**, not direct experimental observations. Use the
+language "DMS-derived dot-bracket" or "DMS-constrained model" rather
+than "ground truth" — secondary-structure prediction under DMS
+constraints is still a model.
+
 ## Stages at a glance
 
 | Stage | What it does | Key outputs |
 |-------|--------------|-------------|
+| [doctor](docs/STAGES.md#doctor) | environment diagnostics | (stdout summary; optional `--json`) |
+| [validate-inputs](docs/STAGES.md#validate-inputs) | pre-flight config + data validation | (stdout summary; optional `--json`) |
 | [stats](docs/STAGES.md#stats) | per-transcript summary | `stats/per_transcript_statistics.csv`, `stats_summary.svg` |
 | [landscape](docs/STAGES.md#landscape) | GC-gradient sim + experimental overlay | `landscape/landscape_overlay.svg`, `gc_gradient.csv`, `pairing_bias_{GC,AU,GU}.svg` |
 | [features](docs/STAGES.md#features) | element decomposition + heatmaps + ECDFs | `features/raw_motifs.csv`, `heatmap_size_ratios.svg`, `phase_space_contour.svg`, `span_boxplot.svg` |
@@ -253,6 +295,51 @@ runs/<your-run>/
 
 Plots default to `.svg` (editable in Inkscape/Illustrator). Switch to
 `png` or `pdf` by setting `plot_format` in the YAML.
+
+## What mtrnafeat is not
+
+- Not a raw FASTQ-to-reactivity pipeline. Use ShapeMapper2
+  ([Busan & Weeks, 2018](https://doi.org/10.1261/rna.061945.117)) or
+  RNA Framework ([Incarnato et al., 2018](https://doi.org/10.1093/nar/gky486))
+  upstream.
+- Not a replacement for ShapeMapper2, RNA Framework, or SEISMIC-RNA /
+  DREEM-style ensemble deconvolution. `mtrnafeat` consumes their outputs.
+- Not a new thermodynamic folding algorithm. ViennaRNA
+  ([Lorenz et al., 2011](https://doi.org/10.1186/1748-7188-6-26))
+  and RNAstructure do the folding; `mtrnafeat` summarizes and compares.
+- Not a validated co-transcriptional folding simulator for long mt-mRNAs.
+  `cofold` and `kinetic` are exploratory parameter sweeps, not predictions.
+- Not a tertiary-structure prediction tool. Pseudoknots and tertiary
+  contacts are outside standard dot-bracket secondary-structure models.
+
+## Interpretation cautions
+
+1. DMS-derived dot-bracket structures are model-derived, not direct
+   observations.
+2. DMS mainly informs A/C accessibility/reactivity; interpretation
+   differs across bases, chemistries, and modifications.
+3. m1A can alter DMS signal; mask or annotate known m1A sites if you
+   have a modification table. (Modification-aware analysis is a planned
+   stage; the bundled `data/mt_modifications.tsv` is not yet wired into
+   the pipeline.)
+4. Full-length MFE is a coarse descriptor for long mRNAs; prefer
+   `local-probability` for region-level interpretation.
+5. Synonymous-null models (`substitution`) test whether observed coding
+   sequences have unusual structural properties relative to codon-aware
+   nulls. They do **not**, on their own, prove selection on RNA
+   structure.
+6. Yeast and human mitochondrial transcript architectures differ
+   markedly (UTR lengths, GC content, strand origin). Aggregate
+   yeast-vs-human comparisons should report strand and region rather
+   than pooling silently.
+7. Human ND6 is L-strand encoded and has very different composition
+   from the H-strand transcripts; do not pool it without annotation.
+8. CoFold / kinetic outputs are exploratory unless validated
+   experimentally for the transcript and condition of interest.
+9. The `.db` header `kcal/mol` value is the upstream caller's reported
+   energy under its constrained fold and is not authoritative for
+   thermodynamic comparisons; `mtrnafeat` recomputes ΔG via Vienna
+   `eval_structure` where it matters.
 
 ## Examples
 

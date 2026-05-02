@@ -45,7 +45,7 @@ max_bp_span: 300
 cofold_alpha: 0.5
 cofold_tau: 640.0
 # `window` command engine; default is "rnastructure" (matches how the .db
-# ground-truth dot-brackets were produced upstream). Override per run via
+# DMS-derived dot-brackets were produced upstream). Override per run via
 # `mtrnafeat window ... -- --engine vienna`.
 fold_engine: rnastructure
 

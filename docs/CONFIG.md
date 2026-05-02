@@ -230,7 +230,7 @@ probability` runs RNAplfold and reports a continuous pair probability.
 - **Controls**: folding engine for the `window` command. One of
   `rnastructure` or `vienna`.
   - `rnastructure` (default) — matches how the upstream `.db`
-    ground-truth dot-brackets were produced (`Fold -md <max_bp_span>`).
+    DMS-derived dot-brackets were produced (`Fold -md <max_bp_span>`).
     Requires the `RNAstructure` binary on PATH and the `DATAPATH`
     environment variable pointing at its `data_tables/` directory.
   - `vienna` — `RNA.fold_compound(seq, md)` with `md.max_bp_span = N`.

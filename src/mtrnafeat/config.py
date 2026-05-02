@@ -78,7 +78,7 @@ class Config:
     cofold_tau: float = 640.0
     cofold_alpha_sweep: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
     cofold_tau_sweep: tuple[float, ...] = (160.0, 320.0, 640.0, 1280.0, 2560.0)
-    # Per-window folder used by the `window` command. The .db ground-truth
+    # Per-window folder used by the `window` command. The .db DMS-derived
     # dot-brackets were produced upstream with RNAstructure (Moran et al.,
     # `Fold -md 350`), so RNAstructure is the canonical match. ViennaRNA is
     # available via `--engine vienna` for the legacy path. Other commands

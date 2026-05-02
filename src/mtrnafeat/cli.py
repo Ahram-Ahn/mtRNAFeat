@@ -11,6 +11,8 @@ from mtrnafeat import __version__
 from mtrnafeat.config import Config, load_config
 
 SUBCOMMANDS = {
+    "doctor": "mtrnafeat.commands.doctor",
+    "validate-inputs": "mtrnafeat.commands.validate_inputs",
     "stats": "mtrnafeat.commands.stats",
     "landscape": "mtrnafeat.commands.landscape",
     "kinetic": "mtrnafeat.commands.kinetic",

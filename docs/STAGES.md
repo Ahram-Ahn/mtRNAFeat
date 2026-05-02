@@ -23,6 +23,8 @@ mtrnafeat substitution --config configs/all.yaml --outdir runs/x -- --n 1000 --m
 
 ## Index
 
+- [`doctor`](#doctor) — environment diagnostics
+- [`validate-inputs`](#validate-inputs) — pre-flight config + data checks
 - [`stats`](#stats) — per-transcript statistics + boxplot
 - [`landscape`](#landscape) — GC-gradient simulation + experimental overlay
 - [`features`](#features) — element decomposition, heatmaps, phase-space, span ECDFs
@@ -37,6 +39,56 @@ mtrnafeat substitution --config configs/all.yaml --outdir runs/x -- --n 1000 --m
 - [`kinetic`](#kinetic) — DrTransformer kinetic folding (opt-in)
 - [`plot`](#plot) — re-render plots from cached CSVs
 - [`run-all`](#run-all) — orchestrate the full pipeline
+
+---
+
+## doctor
+
+**Purpose**. One-shot environment diagnostics: confirms Python ≥ 3.11,
+the ViennaRNA Python binding, RNAplfold availability, RNAstructure
+availability and `DATAPATH` (when `fold_engine` requires it), and
+whether DrTransformer is on `PATH` for the optional `kinetic` stage.
+Prints a fixed-width summary table.
+
+**Reads**: nothing on disk other than the optional `--config` to surface
+which config was loaded. The default `Config` is used otherwise.
+**Writes**: stdout summary; optionally a JSON list of issues with
+`--json PATH`.
+
+**Flags (after `--`)**:
+| Flag | Effect |
+|------|--------|
+| `--json PATH` | Also write the issue list as JSON to `PATH`. |
+
+**Exit status**: `0` if no `ERROR` rows; `1` otherwise. `WARN` and
+`OPTIONAL` rows never fail the command.
+
+---
+
+## validate-inputs
+
+**Purpose**. Pre-flight check of the supplied config and the data files
+it references. Catches mismatched sequence/structure lengths, unbalanced
+brackets, non-ACGU characters, mis-sized UTR/CDS annotations, and
+missing optional inputs (alignment, modifications table) before an
+expensive analysis stage runs.
+
+**Reads**: `cfg`, `cfg.data_dir`, every `.db` file in `cfg.db_files`,
+`cfg.alignment_file` (optional), `data/mt_modifications.tsv` (optional).
+**Writes**: stdout summary; optionally a JSON list of issues with
+`--json PATH`. No output directory is created.
+
+**Flags (after `--`)**:
+| Flag | Effect |
+|------|--------|
+| `--json PATH` | Also write the issue list as JSON to `PATH`. |
+
+**Exit status**: `0` if no `ERROR` rows; `1` otherwise. Missing optional
+files (alignment, modifications) produce `WARN` and do not fail the
+command.
+
+**Note**. Requires `--config`. With no config, the command prints a
+hint and exits non-zero.
 
 ---
 
@@ -118,7 +170,8 @@ plus per-position and summary CSVs:
    max-bp-span cap.
 3. **Engine span**: refold the transcript with `max_bp_span = N` (default
    300 nt) under the chosen engine — `rnastructure` (default, matches
-   how the `.db` ground truth was produced upstream) or `vienna`.
+   how the `.db` DMS-derived dot-brackets were produced upstream) or
+   `vienna`.
 
 The plot stacks a rolling paired-fraction trace for all three folds
 (legend outside the data axis) and a transcript-architecture strip

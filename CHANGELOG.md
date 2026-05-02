@@ -6,6 +6,47 @@ per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-01
+
+Phase 1 of the realignment toward a careful downstream analysis layer
+(see `mtrnafeat_ai_refinement_instructions.txt`). User-facing changes
+focus on environment / input pre-flight checks and documentation
+terminology. No analysis-stage outputs change in this release.
+
+### Added
+
+- **`mtrnafeat doctor`** — environment diagnostics command. Reports
+  Python version, ViennaRNA importability, RNAplfold and RNAstructure
+  availability (the latter conditionally `ERROR` when
+  `fold_engine: rnastructure`), `DATAPATH`, and DrTransformer
+  (`OPTIONAL`). Supports `--json PATH` for machine-readable output.
+- **`mtrnafeat validate-inputs`** — pre-flight check of config, `.db`
+  files (length parity, bracket balance, ACGU alphabet), bundled
+  annotations (UTR/CDS coordinates within transcript length, CDS
+  divisibility by 3), and optional inputs (alignment, modifications
+  table). Supports `--json PATH`.
+- **`src/mtrnafeat/validation.py`** — reusable `ValidationIssue`
+  dataclass plus pure-function checkers used by both new commands.
+- README sections **"Recommended workflow"**, **"What mtrnafeat is
+  not"**, and **"Interpretation cautions"**, framing the package's
+  scope and limitations explicitly.
+
+### Changed
+
+- Documentation now refers to the `.db` dot-brackets as
+  **DMS-derived** or **DMS-constrained model** rather than
+  **"ground truth"**, reflecting that these structures are model
+  outputs from DMS-MaPseq data, not direct experimental observations.
+  Affected files: `README.md`, `docs/STAGES.md`, `docs/CONFIG.md`,
+  `configs/all.yaml`, `configs/template.yaml`, `src/mtrnafeat/config.py`,
+  `CHANGELOG.md`.
+- README opening rewritten around the six analysis questions the
+  package is meant to answer, with explicit non-goals up front.
+
+## [0.1.0-pre-rename] — pre-0.2.0 development
+
+Items previously listed under `[Unreleased]`:
+
 ### Added
 
 - **`local-probability` stage** — new subcommand that runs ViennaRNA's
@@ -48,7 +89,7 @@ per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resolution and with both folding engines, so the duplicate panel
   was visually noisy without adding signal.
 - **`fold_engine` default is `rnastructure`** (was `vienna` in the
-  initial release). Matches how the upstream `.db` ground-truth
+  initial release). Matches how the upstream `.db` DMS-derived
   dot-brackets were produced. Override per run with `-- --engine vienna`
   if RNAstructure isn't on PATH.
 
