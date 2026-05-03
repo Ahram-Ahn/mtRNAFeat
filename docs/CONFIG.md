@@ -381,14 +381,19 @@ probability` runs RNAplfold and reports a continuous pair probability.
 
 ## CoFold
 
-The CoFold soft long-range penalty (Proctor & Meyer, *NAR* 2013,
-[doi:10.1093/nar/gkt600](https://academic.oup.com/nar/article/41/19/9090/2411166))
+The CoFold-inspired soft long-range penalty (Proctor & Meyer, *NAR*
+2013, Vol 41 Iss 9, e102,
+[doi:10.1093/nar/gkt174](https://doi.org/10.1093/nar/gkt174))
 augments the ViennaRNA energy model with `f(d) = alpha * (1 - exp(-d / tau))`,
 in kcal/mol, applied to every candidate base pair of sequence-distance `d`.
 The penalty is monotonically increasing in `d`, so long-range contacts
 pay more than short-range ones — the kinetic intuition being that bases
 transcribed far apart in time have less chance to find each other before
-downstream sequence appears.
+downstream sequence appears. (Note: this kcal/mol parameterization and
+the mtrnafeat default `alpha = 0.5`, `tau = 640` are this implementation's
+own choices; the published CoFold uses a dimensionless multiplicative
+scaling with different numerical defaults — treat sweep outputs as
+exploratory rather than as a literal CoFold reproduction.)
 
 **The two parameters control the penalty's shape:**
 

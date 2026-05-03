@@ -564,11 +564,14 @@ gets to the DMS-evaluated ΔG. Optionally also computes a per-window
 correlation between CoFold ΔG and DMS ΔG.
 
 **Background — what is CoFold, and what do α and τ mean?** CoFold
-(Proctor & Meyer, 2013, *NAR*,
-[doi:10.1093/nar/gkt600](https://academic.oup.com/nar/article/41/19/9090/2411166))
-is a co-transcriptional folding model that augments Vienna's nearest-
-neighbour energy with a soft penalty on every candidate base pair `(i, j)`
-of sequence distance `d = j − i`:
+(Proctor & Meyer, 2013, *NAR* Vol 41 Iss 9, e102,
+[doi:10.1093/nar/gkt174](https://doi.org/10.1093/nar/gkt174))
+is a co-transcriptional folding model that augments the standard
+nearest-neighbour energy with a long-range scaling on candidate pairs.
+The mtrnafeat implementation uses a kcal/mol soft-penalty
+parameterization (not identical to the published CoFold parameterization)
+applied to every candidate base pair `(i, j)` of sequence distance
+`d = j − i`:
 
 ```
 f(d) = α · (1 − exp(−d / τ))      [kcal/mol]

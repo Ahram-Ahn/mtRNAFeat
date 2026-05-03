@@ -1,15 +1,26 @@
 """CoFold-style co-transcriptional folding (pure Python, ViennaRNA soft constraints).
 
-Reproduces the soft long-range penalty from Proctor & Meyer 2013, *NAR*
-(https://academic.oup.com/nar/article/41/19/9090/2411166):
+Inspired by the co-transcriptional folding approach of Proctor & Meyer
+2013, *NAR* Vol 41 Iss 9, e102
+(https://academic.oup.com/nar/article/41/9/e102/2409154 ;
+DOI 10.1093/nar/gkt174). Implemented here as a kcal/mol soft long-range
+penalty:
 
     f(d) = alpha * (1 - exp(-d / tau))
 
 applied as an additional energy on each candidate base pair (i, j) with
 sequence distance d = j - i. Long-range pairs are progressively
 penalized, modelling the kinetic disadvantage of pairing partners that
-were transcribed far apart in time. CoFold's defaults are alpha = 0.5
-kcal/mol and tau = 640 nt (corresponding to ~50 nt/s transcription rate).
+were transcribed far apart in time.
+
+NOTE on parameter values: the published CoFold paper uses a dimensionless
+multiplicative scaling on candidate-pair "reachability" with very
+different numerical defaults. The mtrnafeat defaults alpha = 0.5
+kcal/mol and tau = 640 nt are this implementation's own choices: alpha
+is in kcal/mol (not dimensionless), and tau = 640 corresponds to a
+~50 nt/s transcription rate and ~12.8 s pairing window under that
+parameterization. Treat sweep outputs as exploratory rather than as a
+literal reproduction of the published CoFold method.
 
 We implement this purely via ViennaRNA's `fc.sc_add_bp` interface — no
 external binary, no patched libRNA. At alpha=0 the result is exactly
