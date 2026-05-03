@@ -21,6 +21,7 @@ from mtrnafeat.viz.style import (
     LINEWIDTH,
     TITLE_FONTSIZE,
     apply_theme,
+    panel_label,
     repel_labels,
     style_axis,
 )
@@ -32,6 +33,8 @@ def landscape_overlay(sim_df, exp_df, out_path: Path, dpi: int = 300) -> Path:
     apply_theme()
     species_list = ["Human", "Yeast"]
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
+    for ax, letter in zip(axes, ("A", "B")):
+        panel_label(ax, letter)
 
     sim_conditions = list(sim_df["Condition"].unique())
     contour_palette = sns.color_palette("viridis", max(len(sim_conditions), 3))

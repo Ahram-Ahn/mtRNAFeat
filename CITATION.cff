@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use mtrnafeat in academic work, please cite it as below."
+title: "mtrnafeat: Mitochondrial mRNA structural-feature analysis"
+abstract: >-
+  Downstream analysis toolkit for mitochondrial mRNA secondary-structure
+  features. Consumes DMS-MaPseq-derived dot-bracket structures and pairs
+  them with thermodynamic predictions (ViennaRNA, RNAstructure, RNAplfold)
+  to compare experimental and modeled local pairing, call regions of
+  experimental-vs-thermodynamic divergence, and quantify codon-substitution
+  thermodynamics across mt-mRNAs in human and yeast.
+type: software
+authors:
+  - family-names: Ahn
+    given-names: Ahram
+    email: ahramahn82@gmail.com
+version: 0.3.0
+date-released: "2026-05-02"
+license: MIT
+repository-code: "https://github.com/Ahram-Ahn/mtRNAFeat"
+url: "https://github.com/Ahram-Ahn/mtRNAFeat"
+keywords:
+  - mitochondrial RNA
+  - DMS-MaPseq
+  - secondary structure
+  - ViennaRNA
+  - RNAplfold
+  - thermodynamics
+  - bioinformatics

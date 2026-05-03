@@ -36,6 +36,10 @@ def _parse(args: list[str] | None) -> dict:
             out["substitution_n_simulations"] = int(next(it))
         elif tok == "--max-nt":
             out["substitution_max_nt"] = int(next(it))
+        else:
+            raise SystemExit(
+                f"substitution: unknown flag {tok!r}. Supported: --n, --max-nt."
+            )
     return out
 
 

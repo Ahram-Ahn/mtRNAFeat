@@ -24,15 +24,21 @@ EXPECTED_GENES = (
 REGION_LABELS = ("5'UTR", "CDS", "3'UTR/tail")
 
 # Publication palette — used by every viz module via viz.style.apply().
+# DMS / model series colors are Okabe-Ito (colorblind-safe) so the most
+# heavily used overlay (DMS vs RNAplfold/Vienna/RNAstructure) reads
+# correctly under all three common color-vision deficiencies.
 PALETTE = {
     "Human": "#D62728",      # red
     "Yeast": "#FF7F0E",      # orange
     "Sim Human": "#F4A6A2",
     "Sim Yeast": "#FFD7A8",
-    "DMS": "#1F77B4",        # blue
+    "DMS": "#E69F00",        # Okabe-Ito orange (replaces #1F77B4 blue;
+                              # safer next to RNAstructure brown / Vienna red)
     "Vienna": "#D62728",
     "Vienna_span": "#2CA02C",
-    "RNAstructure": "#8C564B",   # brown — distinct from the Human/Vienna red
+    "RNAstructure": "#56B4E9",   # Okabe-Ito sky-blue (replaces brown;
+                                  # high-contrast against DMS orange under
+                                  # deuteranopia)
 
     "Diversity": "#000000",
     "Cotrans": "#9467BD",

@@ -25,7 +25,7 @@ def plot_kinetic_trajectory(traj_df, gene: str, species: str, out_path: Path,
     top_ids = (sub[sub["Transcript_Length"] == final_L]
                .sort_values("Occupancy", ascending=False)["Struct_ID"].head(top_n).tolist())
     fig, axes = plt.subplots(2, 1, figsize=(13, 8.5), sharex=True)
-    palette = sns.color_palette("husl", n_colors=max(top_n, 4))
+    palette = sns.color_palette("colorblind", n_colors=max(top_n, 4))
     for c, sid in enumerate(top_ids):
         s = sub[sub["Struct_ID"] == sid].sort_values("Transcript_Length")
         axes[0].plot(s["Transcript_Length"], s["Occupancy"], color=palette[c], lw=1.8, label=sid)

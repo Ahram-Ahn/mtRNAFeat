@@ -177,6 +177,38 @@ def test_cotrans_attach_provenance_handles_empty():
     assert out.empty
 
 
+def test_tis_sensitivity_sweep_yields_distinct_rows():
+    """Same gene at multiple (upstream, downstream) pairs should give
+    distinct effect sizes — a narrow window samples only the immediate
+    TIS neighborhood, a wide one averages it out."""
+    n = 600
+    # Open region around position 300 (the start codon), paired elsewhere
+    p = np.where((np.arange(n) > 290) & (np.arange(n) < 310), 0.05, 0.85)
+    structure = "." * n  # all-unpaired DMS for simplicity
+    result = _make_result(p, structure=structure)
+    annot = {"l_tr": n, "l_utr5": 300, "l_cds": 250, "l_utr3": 50}
+    rng = np.random.default_rng(13)
+    rows = []
+    for u, d in [(10, 10), (50, 50), (200, 200)]:
+        rows.append({
+            "tag": f"{u}_{d}",
+            **tis_summary_row(result, annot,
+                              upstream=u, downstream=d,
+                              n_circ_shifts=200, rng=rng),
+        })
+    df = pd.DataFrame(rows)
+    # The narrow (10, 10) window is *inside* the open patch, so its mean
+    # P(paired) should be much lower than the (200, 200) window which
+    # averages in the surrounding paired regions.
+    narrow = df[df["tag"] == "10_10"].iloc[0]
+    wide = df[df["tag"] == "200_200"].iloc[0]
+    assert narrow["TIS_RNAplfold_Mean_Ppaired"] < wide["TIS_RNAplfold_Mean_Ppaired"]
+    # And at the narrow window the empirical p of "TIS unusually low"
+    # should be smaller than at the wide window (more localized signal)
+    assert narrow["Empirical_P_TIS_Low_Ppaired_vs_CDS_Windows"] \
+        < wide["Empirical_P_TIS_Low_Ppaired_vs_CDS_Windows"]
+
+
 def test_circular_shift_p_low_constant_track_is_one():
     """A constant track means every shift gives the same window mean,
     so the empirical P(shifted ≤ observed) should be 1.0."""

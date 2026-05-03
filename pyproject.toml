@@ -4,12 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mtrnafeat"
-version = "0.1.0"
+version = "0.3.0"
 description = "Mitochondrial mRNA structural-feature analysis: DMS-MaPseq vs Vienna MFE, codon-substitution thermodynamics, CoFold parameter sweep."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Ahram Ahn" }]
+authors = [{ name = "Ahram Ahn", email = "ahramahn82@gmail.com" }]
 license = { text = "MIT" }
+keywords = [
+    "mitochondrial RNA",
+    "DMS-MaPseq",
+    "secondary structure",
+    "ViennaRNA",
+    "RNAplfold",
+    "thermodynamics",
+    "bioinformatics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = [
     "viennarna>=2.5",
     "numpy>=1.26",
@@ -21,6 +41,12 @@ dependencies = [
     "biopython>=1.83",
     "tqdm>=4.66",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Ahram-Ahn/mtRNAFeat"
+Repository = "https://github.com/Ahram-Ahn/mtRNAFeat"
+Issues = "https://github.com/Ahram-Ahn/mtRNAFeat/issues"
+Changelog = "https://github.com/Ahram-Ahn/mtRNAFeat/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 kinetic = ["drtransformer>=0.13"]

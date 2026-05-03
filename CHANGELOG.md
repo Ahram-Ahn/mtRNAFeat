@@ -6,17 +6,144 @@ per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- **Substitution KDE panels: WT vertical lines could fall off the
-  auto-scaled x-axis** when the wild-type ΔG was far from the null
-  pool's mean (e.g. yeast ATP9: WT_MFE = −68.9 kcal/mol vs pool means
-  near −38). The KDE x-limits are now expanded explicitly to include
-  both WT lines so the WT-vs-pool comparison is visible for every
-  gene.
+- **`structure-deviation` dinucleotide-shuffle null model** (opt-in via
+  `structure_deviation_null_model: dinuc` + `structure_deviation_n_null > 0`,
+  also exposed as `--null dinuc --n-null N` on the CLI). Per-gene null
+  distribution of max-|deviation| under Altschul-Erikson dinucleotide
+  shuffle (Westfall-Young max-statistic correction within gene), then
+  Benjamini-Hochberg q-values across all called regions pooled across
+  genes. Each row in `structure_deviation_regions.csv` now carries
+  `Empirical_P`, `Q_Value`, `Null_Model`, `N_Null`, and a
+  `Statistical_Support_Label` of `max_stat_significant`,
+  `max_stat_nonsignificant`, or `effect_size_only` (when null is off).
+  Per-gene summary gains `N_Significant_Regions_Q05`. Defaults stay
+  conservative (`null_model: "none"`, `n_null: 0`) so `run-all`
+  wall-time is unchanged unless the user opts in.
+- **Per-run reproducibility manifest** (`<outdir>/run_manifest.json`):
+  written by every `mtrnafeat` invocation. Records the package version,
+  resolved ViennaRNA and RNAstructure versions/paths, current git
+  commit (with `(dirty)` marker when local edits are present), Python
+  version, platform, the command name and its full argv, the seed,
+  the config path, and an ISO-8601 UTC timestamp. Lets reviewers and
+  downstream consumers reproduce a run with the same tool stack and
+  audit drift between runs (e.g. silent ViennaRNA upgrades).
+- **CI workflow** (`.github/workflows/test.yml`): two-job matrix that runs
+  unit tests + ruff on Python 3.11/3.12 without ViennaRNA (skipping
+  `needs_rna` tests), and a separate Conda-based job that installs
+  ViennaRNA + RNAstructure via `environment.yml` and runs the full suite
+  plus the `examples/01_smoke_mini.sh` smoke test.
+- **`CITATION.cff`** at the repo root for machine-readable citation
+  metadata (GitHub auto-renders this on the repo page).
+- **`pyproject.toml` metadata**: `[project.urls]` (homepage, repository,
+  issues, changelog), trove classifiers, keywords, and author email.
+- **`Config.__post_init__` validation**: bounds and enum checks on every
+  numeric / categorical field. Out-of-range values (negative thresholds,
+  zero windows, `plot_format: jpg`, `fold_engine: mfold`, etc.) now
+  raise `ValueError` at config load instead of silently producing
+  NaN tracks downstream. Cross-field invariant checks include
+  `rnaplfold_max_bp_span <= rnaplfold_window` and
+  `structure_deviation_low_threshold <= structure_deviation_high_threshold`.
+- **BH-FDR multiple-testing correction** on TIS empirical p-values
+  (`mtrnafeat.core.stats.bh_fdr`). Each `Empirical_P_*` column in
+  `local_probability_TIS_summary.csv` now ships with a parallel
+  `Q_Value_*` column. The sensitivity-sweep table corrects within each
+  TIS context width (each `(upstream, downstream)` pair is its own
+  hypothesis family); the primary summary corrects across genes.
+- **New config fields** for `structure-deviation` bin definitions:
+  `structure_deviation_mid_cds_lo` (default 0.30),
+  `structure_deviation_mid_cds_hi` (default 0.70), and
+  `structure_deviation_late_cds_window_nt` (default 300). Lifted from
+  hard-coded values inside `_bin_intervals` so the cross-gene heatmap
+  bin definitions are now visible and tunable from YAML.
 
 ### Changed
 
+- **`README.md`**: replaced the `<repo-url>` placeholders in the install
+  block and the bibtex citation with the actual repository URL. Added a
+  link to the new `docs/FIGURES.md`.
+- **CLI `_parse()` helpers reject unknown flags.** `local-probability`,
+  `structure-deviation`, `cofold`, `significance`, `substitution`,
+  `window`, and `run-all` now raise `SystemExit` with a clear message on
+  any unrecognized flag instead of silently ignoring it (a typo like
+  `--threshhold 0.3` no longer slips through with the default value).
+
+### Documentation
+
+- **`docs/FIGURES.md`**: new reference describing every figure output
+  (what is plotted, how to read each axis, source CSV) — required for
+  publication supplementary methods and for users re-rendering plots
+  from cached CSVs.
+
+## [0.3.0] — 2026-05-02
+
+### Added
+
+- **`structure-deviation` stage**: region-discovery analysis on top of
+  the RNAplfold-vs-DMS comparison. Calls intervals where the smoothed
+  signed deviation `P_model − P_DMS` exceeds a threshold, classifies
+  each region into one of `model_high_dms_low`, `model_low_dms_high`,
+  `concordant_paired`, `concordant_open`, `mixed_deviation`, or
+  `ambiguous`, and emits four publication-oriented CSVs (per-position,
+  regions, gene-summary, gene-region-matrix) plus per-gene four-panel
+  plots, per-species lollipop summaries, and a cross-gene
+  architectural-bin heatmap. Replaces the biological-interpretation
+  role of the legacy `significance --scan`. New CLI:
+  `mtrnafeat structure-deviation --config configs/all.yaml --outdir runs/dev`.
+  Wired into `run-all` alongside the existing stages.
+- **`local-probability` plot polish**: TIS shading now runs vertically
+  through all four panels; the per-window Δ panel replaces the
+  per-position smoothed Δ (cleaner on long transcripts); a context
+  subtitle (`5'UTR=… · CDS=… · TIS=…`) sits below every title; raw
+  P(paired) fades on transcripts > 1000 nt.
+- **`local-probability` TIS sensitivity sweep**: new
+  `local_probability_TIS_sensitivity.csv` reporting the same TIS
+  metrics at a configurable sweep of `(upstream, downstream)` widths
+  (defaults `(30,30), (50,50), (100,100), (200,200), (500,500)`). A
+  single fixed window hides signal in long-5'UTR yeast genes
+  (Yeast COX1 is unusually open at `−30/+30`, P ≈ 0.04, but trivial
+  at `−100/+100`); reviewers can read robustness from this table
+  directly.
+- **`local-probability` DMS overlay**: per-gene plots now render four
+  panels (RNAplfold P(paired), DMS paired fraction, signed Δ,
+  architecture+TIS) and emit `local_probability_per_window.csv`
+  (windowed agreement) and `local_probability_TIS_summary.csv`
+  (TIS-vs-CDS-background effect size with circular-shift empirical
+  p-values). The per-position CSV now carries `DMS_Paired_*` columns
+  whenever the matching `.db` record's length agrees with the
+  RNAplfold input.
+
+### Changed
+
+- **`run-all` no longer invokes `significance`** by default.
+  `structure-deviation` is the publication-facing biological-interpretation
+  layer; `significance` is preserved as a standalone command for users
+  who want the thermodynamic-null QC. Removing it from the default
+  pipeline cuts wall-clock time substantially (the dinuc-shuffle null
+  pool was the slowest stage). Run `mtrnafeat significance --config
+  configs/all.yaml --outdir runs/sig -- --scan` directly when needed.
+- **`structure-deviation` Δ panel harmonized with `local-probability`**.
+  Both stages now display the deviation track at the same
+  per-`local_probability_scan_window_nt`-window scale (default 120 nt,
+  step 10) so the two figures tell visually identical stories. Region
+  calling itself still runs on the per-position 25-nt rolling track in
+  the analysis layer; the rectangles in the Δ panel carry that
+  information.
+- **`significance` plot/CSV relabeled** so within-gene Z-scores are
+  no longer presented as p-values. The cotrans plot title now reads
+  *"local structural-change scan (mode=…, n=N windows, candidate
+  peaks |within-gene Z| ≥ T)"*; bottom-panel y-label is "Within-gene
+  Z (smoothed Δ)"; peak-marker labels carry "candidate peak". Every
+  row of `cotrans_per_window.csv` is tagged with
+  `Z_score_type="within_gene_window_standardized_delta"` and
+  `Is_statistical_pvalue=False`. The Workman-Krogh `z_per_gene.csv`
+  is the only null-model-backed output of this command; layer-2
+  scan is exploratory.
+- **README + STAGES.md** rewritten to describe the new
+  `structure-deviation` stage as the publication-facing
+  interpretation layer; the legacy `significance` is documented as
+  the optional thermodynamic-null QC.
 - **`window` plot now shows two traces, not three.** The
   unconstrained ``Vienna full`` trace is computed and stored in the
   per-position CSV but no longer plotted; for long mRNAs the
@@ -39,6 +166,15 @@ per [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ``cofold_gap_strip_{species}.{ext}``. The
   ``gap_heatmap_panels`` Python entry-point is kept as a backward
   alias for ``gap_strip_panels``.
+
+### Fixed
+
+- **Substitution KDE panels: WT vertical lines could fall off the
+  auto-scaled x-axis** when the wild-type ΔG was far from the null
+  pool's mean (e.g. yeast ATP9: WT_MFE = −68.9 kcal/mol vs pool means
+  near −38). The KDE x-limits are now expanded explicitly to include
+  both WT lines so the WT-vs-pool comparison is visible for every
+  gene.
 
 ## [0.2.0] — 2026-05-01
 

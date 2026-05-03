@@ -28,16 +28,16 @@ from mtrnafeat.config import Config
 INDEPENDENT = (
     "stats", "landscape", "features",
     "window", "local_probability",
-    "significance", "tis", "compare",
+    "structure_deviation",
+    "tis", "compare",
     "substitution", "cofold", "gene_panel",
 )
 
 # Per-stage extra args appended after `--` when invoking the subcommand.
-# significance: --per-window unlocks the refined Panel-B-style overlays;
-# without it, the stage emits only z_per_gene.csv.
-STAGE_EXTRAS: dict[str, list[str]] = {
-    "significance": ["--per-window"],
-}
+# (No defaults currently — ``significance`` is no longer in the default
+# ``run-all`` set; users who want it run ``mtrnafeat significance`` directly
+# or pass ``--include significance`` if that flag is added later.)
+STAGE_EXTRAS: dict[str, list[str]] = {}
 
 
 def _parse(args: list[str] | None) -> dict:
@@ -50,6 +50,10 @@ def _parse(args: list[str] | None) -> dict:
             parsed["parallel"] = True
         elif tok == "--skip":
             parsed["skip"].update(next(it).split(","))
+        else:
+            raise SystemExit(
+                f"run-all: unknown flag {tok!r}. Supported: --parallel, --skip <stage1,stage2>."
+            )
     return parsed
 
 

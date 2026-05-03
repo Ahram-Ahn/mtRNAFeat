@@ -9,6 +9,7 @@ from pathlib import Path
 
 from mtrnafeat import __version__
 from mtrnafeat.config import Config, load_config
+from mtrnafeat.core.manifest import write_run_manifest
 
 SUBCOMMANDS = {
     "doctor": "mtrnafeat.commands.doctor",
@@ -20,6 +21,7 @@ SUBCOMMANDS = {
     "local-probability": "mtrnafeat.commands.local_probability",
     "features": "mtrnafeat.commands.features",
     "significance": "mtrnafeat.commands.significance",
+    "structure-deviation": "mtrnafeat.commands.structure_deviation",
     "compare": "mtrnafeat.commands.compare",
     "tis": "mtrnafeat.commands.tis",
     "substitution": "mtrnafeat.commands.substitution",
@@ -60,6 +62,18 @@ def main(argv: list[str] | None = None) -> int:
 
     module = importlib.import_module(SUBCOMMANDS[args.command])
     rest = args.rest[1:] if args.rest and args.rest[0] == "--" else args.rest
+
+    # Reproducibility manifest: package + tool versions, git commit,
+    # command and argv. Written before dispatch so a crashing stage
+    # still leaves an audit trail of what was attempted.
+    write_run_manifest(
+        Path(cfg.outdir),
+        command=args.command,
+        argv=list(argv) if argv is not None else list(sys.argv[1:]),
+        config_path=args.config,
+        seed=cfg.seed,
+    )
+
     return int(module.run(cfg, rest) or 0)
 
 

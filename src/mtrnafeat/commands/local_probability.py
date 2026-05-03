@@ -36,11 +36,44 @@ import pandas as pd
 from mtrnafeat.analysis import local_probability
 from mtrnafeat.config import Config
 from mtrnafeat.constants import file_safe_gene
+from mtrnafeat.core.stats import bh_fdr
 from mtrnafeat.io.annotations import annotation_for
 from mtrnafeat.io.writers import canonical_csv
 from mtrnafeat.rng import make_rng
 from mtrnafeat.viz import local_probability_plot
 from mtrnafeat.viz.style import plot_path
+
+_TIS_PVAL_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("Empirical_P_TIS_Low_Ppaired_vs_CDS_Windows",
+     "Q_Value_TIS_Low_Ppaired_vs_CDS_Windows"),
+    ("Empirical_P_TIS_Low_DMS_Pairfrac_vs_CDS_Windows",
+     "Q_Value_TIS_Low_DMS_Pairfrac_vs_CDS_Windows"),
+)
+
+
+def _add_bh_q_columns(df: pd.DataFrame, group_col: str | None = None) -> pd.DataFrame:
+    """Add Q_Value_* columns next to each Empirical_P_* column.
+
+    BH-FDR is applied within ``group_col`` if provided (e.g. per
+    sensitivity-sweep window so each TIS context width is its own
+    hypothesis family), otherwise across the whole table (the primary
+    TIS summary, where one row per gene defines the family).
+    """
+    if df.empty:
+        for _, q_col in _TIS_PVAL_COLUMNS:
+            df[q_col] = pd.Series(dtype=float)
+        return df
+    for p_col, q_col in _TIS_PVAL_COLUMNS:
+        if p_col not in df.columns:
+            continue
+        if group_col is None:
+            df[q_col] = bh_fdr(df[p_col].to_numpy(dtype=float))
+        else:
+            df[q_col] = (
+                df.groupby(group_col, sort=False)[p_col]
+                .transform(lambda s: bh_fdr(s.to_numpy(dtype=float)))
+            )
+    return df
 
 
 def _parse(args: list[str] | None) -> dict:
@@ -67,6 +100,11 @@ def _parse(args: list[str] | None) -> dict:
             out["tis_downstream"] = int(next(it))
         elif tok == "--tis-n-shuffles":
             out["tis_n_shuffles"] = int(next(it))
+        else:
+            raise SystemExit(
+                f"local-probability: unknown flag {tok!r}. "
+                "See module docstring for the supported flag list."
+            )
     return out
 
 
@@ -98,7 +136,10 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     # Per-window agreement table — one row per (species, gene, window).
     win_frames = []
     tis_rows = []
+    sens_rows: list[dict] = []
     rng = make_rng(cfg.seed + 11)
+    sweep_pairs = tuple((int(u), int(d)) for u, d in cfg.tis_window_sweep_pairs)
+    primary_pair = (int(tis_upstream), int(tis_downstream))
     for res in results:
         try:
             annot = annotation_for(res.species, res.gene)
@@ -110,24 +151,50 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
         if not win_df.empty:
             win_frames.append(win_df)
         if annot is not None:
-            tis_rows.append(local_probability.tis_summary_row(
+            primary_row = local_probability.tis_summary_row(
                 res, annot,
                 upstream=tis_upstream,
                 downstream=tis_downstream,
                 n_circ_shifts=tis_n_shuffles,
                 rng=rng,
-            ))
+            )
+            tis_rows.append(primary_row)
+            # Sensitivity sweep: same machinery at multiple TIS context
+            # widths so reviewers can judge robustness rather than rely on
+            # one fixed window. Reuses the primary row when the (u, d)
+            # pair matches so we don't double-pay the circular-shift cost.
+            for u, d in sweep_pairs:
+                if (u, d) == primary_pair:
+                    sens_rows.append({
+                        "TIS_Window_Tag": f"{u}_{d}",
+                        **primary_row,
+                    })
+                    continue
+                row = local_probability.tis_summary_row(
+                    res, annot,
+                    upstream=u, downstream=d,
+                    n_circ_shifts=tis_n_shuffles,
+                    rng=rng,
+                )
+                sens_rows.append({"TIS_Window_Tag": f"{u}_{d}", **row})
 
-    if win_frames:
+    per_window_all = (pd.concat(win_frames, ignore_index=True)
+                      if win_frames else pd.DataFrame())
+    if not per_window_all.empty:
         canonical_csv(
-            pd.concat(win_frames, ignore_index=True),
+            per_window_all,
             out / "local_probability_per_window.csv",
         )
     if tis_rows:
-        canonical_csv(
-            pd.DataFrame(tis_rows),
-            out / "local_probability_TIS_summary.csv",
+        tis_df = _add_bh_q_columns(pd.DataFrame(tis_rows), group_col=None)
+        canonical_csv(tis_df, out / "local_probability_TIS_summary.csv")
+    if sens_rows:
+        # Each TIS context width (e.g. ±30, ±50, ±100, ±200, ±500) is its
+        # own hypothesis family — apply BH within window tag, not across.
+        sens_df = _add_bh_q_columns(
+            pd.DataFrame(sens_rows), group_col="TIS_Window_Tag",
         )
+        canonical_csv(sens_df, out / "local_probability_TIS_sensitivity.csv")
 
     for res in results:
         gene_df = df[(df["Species"] == res.species) & (df["Gene"] == res.gene)]
@@ -142,5 +209,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             dpi=cfg.dpi,
             tis_upstream=tis_upstream,
             tis_downstream=tis_downstream,
+            per_window_df=per_window_all,
+            scan_window=scan_window,
         )
     return 0

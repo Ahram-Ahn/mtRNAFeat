@@ -67,6 +67,48 @@ class Config:
     tis_upstream_nt: int = 50
     tis_downstream_nt: int = 50
     tis_n_circular_shifts: int = 1000
+    # Sensitivity sweep over TIS context widths so a single fixed window
+    # doesn't hide signal in long-5'UTR yeast transcripts (e.g. yeast COX1
+    # has a 460-nt 5'UTR; the −50/+50 default is far too narrow). Each
+    # (upstream, downstream) pair is summarized in
+    # ``local_probability_TIS_sensitivity.csv`` next to the primary TIS
+    # summary. Compute is cheap (slice + circular-shift means).
+    tis_window_sweep_pairs: tuple[tuple[int, int], ...] = (
+        (30, 30), (50, 50), (100, 100), (200, 200), (500, 500),
+    )
+
+    # ─────────── structure-deviation stage ───────────
+    # Region-discovery pass that compares RNAplfold local pairing
+    # probability (sequence-only thermodynamic prior) to the DMS-derived
+    # paired fraction (experimental measurement) and calls regions where
+    # the two diverge. Replaces the role of the old significance scan
+    # with a biologically interpretable, region-centered output.
+    structure_deviation_threshold: float = 0.25
+    structure_deviation_min_region_length: int = 25
+    structure_deviation_merge_gap: int = 10
+    structure_deviation_high_threshold: float = 0.50
+    structure_deviation_low_threshold: float = 0.30
+    structure_deviation_tis_upstream: int = 30
+    structure_deviation_tis_downstream: int = 60
+    structure_deviation_stop_upstream: int = 60
+    structure_deviation_stop_downstream: int = 30
+    structure_deviation_early_cds_nt: int = 300
+    # Mid-CDS bin = middle ``[lo, hi]`` fraction of the CDS, used by the
+    # cross-gene heatmap so each gene contributes a comparable interior
+    # window. Defaults span the central 40% of the CDS, leaving 30% at
+    # each end for the early-CDS / late-CDS bins.
+    structure_deviation_mid_cds_lo: float = 0.30
+    structure_deviation_mid_cds_hi: float = 0.70
+    # Late-CDS bin width (nt before the stop_upstream window). 300 nt is
+    # roughly the largest mt-mRNA "interior" length that fits before the
+    # stop-codon proximal window in human/yeast transcripts.
+    structure_deviation_late_cds_window_nt: int = 300
+    structure_deviation_top_labels: int = 5
+    # Optional region-level null model. ``"none"`` (default) emits effect
+    # sizes only; ``"dinuc"`` runs a dinucleotide-shuffle null and
+    # max-statistic correction across called regions per gene.
+    structure_deviation_null_model: str = "none"
+    structure_deviation_n_null: int = 0
     # window_nt / step_nt are kept for `significance` and `cofold` which still
     # do a sliding-window scan over each transcript.
     window_nt: int = 120
@@ -106,6 +148,120 @@ class Config:
     dpi: int = 300
     plot_format: str = "svg"   # "svg" (editable) | "png" | "pdf"
 
+    def __post_init__(self) -> None:
+        """Validate numeric ranges and enum choices.
+
+        Failing here means a YAML config or CLI override has a value that
+        would silently produce NaN tracks, flipped windows, or invalid
+        upstream-tool calls. We'd rather hard-fail at load time than emit
+        a junk run.
+        """
+        def _ge(name: str, value: float, lo: float) -> None:
+            if not (value >= lo):
+                raise ValueError(f"{name} must be >= {lo}, got {value!r}")
+
+        def _gt(name: str, value: float, lo: float) -> None:
+            if not (value > lo):
+                raise ValueError(f"{name} must be > {lo}, got {value!r}")
+
+        def _in_unit(name: str, value: float) -> None:
+            if not (0.0 <= value <= 1.0):
+                raise ValueError(f"{name} must be in [0, 1], got {value!r}")
+
+        def _choice(name: str, value: Any, allowed: tuple[str, ...]) -> None:
+            if value not in allowed:
+                raise ValueError(
+                    f"{name} must be one of {allowed}, got {value!r}"
+                )
+
+        # Determinism / parallelism
+        _ge("seed", self.seed, 0)
+        _gt("n_workers", self.n_workers, 0)
+
+        # Simulation
+        _gt("sim_seq_length", self.sim_seq_length, 0)
+        _gt("sim_num_sequences", self.sim_num_sequences, 0)
+        _gt("gradient_steps", self.gradient_steps, 0)
+        _gt("gradient_seqs_per_step", self.gradient_seqs_per_step, 0)
+        _gt("n_shuffles", self.n_shuffles, 0)
+
+        # Smoothing / window scans
+        _gt("rolling_window", self.rolling_window, 0)
+        _gt("rnaplfold_window", self.rnaplfold_window, 0)
+        _gt("rnaplfold_max_bp_span", self.rnaplfold_max_bp_span, 0)
+        if self.rnaplfold_max_bp_span > self.rnaplfold_window:
+            raise ValueError(
+                f"rnaplfold_max_bp_span ({self.rnaplfold_max_bp_span}) must be "
+                f"<= rnaplfold_window ({self.rnaplfold_window}); RNAplfold "
+                "rejects L > W."
+            )
+        _in_unit("rnaplfold_cutoff", self.rnaplfold_cutoff)
+        _gt("local_probability_scan_window_nt", self.local_probability_scan_window_nt, 0)
+        _gt("local_probability_scan_step_nt", self.local_probability_scan_step_nt, 0)
+        _ge("tis_upstream_nt", self.tis_upstream_nt, 0)
+        _ge("tis_downstream_nt", self.tis_downstream_nt, 0)
+        _gt("tis_n_circular_shifts", self.tis_n_circular_shifts, 0)
+
+        # structure-deviation
+        _in_unit("structure_deviation_threshold", self.structure_deviation_threshold)
+        _in_unit("structure_deviation_high_threshold", self.structure_deviation_high_threshold)
+        _in_unit("structure_deviation_low_threshold", self.structure_deviation_low_threshold)
+        if self.structure_deviation_low_threshold > self.structure_deviation_high_threshold:
+            raise ValueError(
+                f"structure_deviation_low_threshold ({self.structure_deviation_low_threshold}) "
+                f"must be <= structure_deviation_high_threshold "
+                f"({self.structure_deviation_high_threshold})."
+            )
+        _gt("structure_deviation_min_region_length", self.structure_deviation_min_region_length, 0)
+        _ge("structure_deviation_merge_gap", self.structure_deviation_merge_gap, 0)
+        _ge("structure_deviation_tis_upstream", self.structure_deviation_tis_upstream, 0)
+        _ge("structure_deviation_tis_downstream", self.structure_deviation_tis_downstream, 0)
+        _ge("structure_deviation_stop_upstream", self.structure_deviation_stop_upstream, 0)
+        _ge("structure_deviation_stop_downstream", self.structure_deviation_stop_downstream, 0)
+        _gt("structure_deviation_early_cds_nt", self.structure_deviation_early_cds_nt, 0)
+        _in_unit("structure_deviation_mid_cds_lo", self.structure_deviation_mid_cds_lo)
+        _in_unit("structure_deviation_mid_cds_hi", self.structure_deviation_mid_cds_hi)
+        if self.structure_deviation_mid_cds_lo > self.structure_deviation_mid_cds_hi:
+            raise ValueError(
+                f"structure_deviation_mid_cds_lo ({self.structure_deviation_mid_cds_lo}) "
+                f"must be <= structure_deviation_mid_cds_hi "
+                f"({self.structure_deviation_mid_cds_hi})."
+            )
+        _gt("structure_deviation_late_cds_window_nt",
+            self.structure_deviation_late_cds_window_nt, 0)
+        _ge("structure_deviation_top_labels", self.structure_deviation_top_labels, 0)
+        _choice(
+            "structure_deviation_null_model",
+            self.structure_deviation_null_model,
+            ("none", "dinuc"),
+        )
+        _ge("structure_deviation_n_null", self.structure_deviation_n_null, 0)
+        if self.structure_deviation_null_model != "none" and self.structure_deviation_n_null == 0:
+            raise ValueError(
+                "structure_deviation_null_model is "
+                f"{self.structure_deviation_null_model!r} but "
+                "structure_deviation_n_null is 0; set n_null > 0 to draw "
+                "any null samples."
+            )
+
+        # window / max_bp_span / cofold
+        _gt("window_nt", self.window_nt, 0)
+        _gt("step_nt", self.step_nt, 0)
+        _gt("max_bp_span", self.max_bp_span, 0)
+        _ge("cofold_alpha", self.cofold_alpha, 0.0)
+        _gt("cofold_tau", self.cofold_tau, 0.0)
+
+        # Engines
+        _choice("fold_engine", self.fold_engine, ("rnastructure", "vienna"))
+
+        # Substitution
+        _gt("substitution_n_simulations", self.substitution_n_simulations, 0)
+        _gt("substitution_max_nt", self.substitution_max_nt, 0)
+
+        # Plot
+        _gt("dpi", self.dpi, 0)
+        _choice("plot_format", self.plot_format, ("svg", "png", "pdf"))
+
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["data_dir"] = str(self.data_dir)
@@ -114,6 +270,7 @@ class Config:
         d["window_size_sweep"] = list(self.window_size_sweep)
         d["cofold_alpha_sweep"] = list(self.cofold_alpha_sweep)
         d["cofold_tau_sweep"] = list(self.cofold_tau_sweep)
+        d["tis_window_sweep_pairs"] = [list(p) for p in self.tis_window_sweep_pairs]
         return d
 
 
@@ -142,4 +299,7 @@ def _apply(cfg: Config, raw: dict[str, Any]) -> Config:
     new_kwargs["window_size_sweep"] = tuple(int(x) for x in new_kwargs["window_size_sweep"])
     new_kwargs["cofold_alpha_sweep"] = tuple(float(x) for x in new_kwargs["cofold_alpha_sweep"])
     new_kwargs["cofold_tau_sweep"] = tuple(float(x) for x in new_kwargs["cofold_tau_sweep"])
+    new_kwargs["tis_window_sweep_pairs"] = tuple(
+        (int(p[0]), int(p[1])) for p in new_kwargs["tis_window_sweep_pairs"]
+    )
     return Config(**new_kwargs)

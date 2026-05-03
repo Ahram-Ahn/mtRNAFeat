@@ -27,10 +27,14 @@ def plot_path(out_dir, basename: str, fmt: str = "png") -> Path:
 SPINE_WIDTH = 1.2
 TICK_WIDTH = 1.1
 TICK_LENGTH = 4.5
-TITLE_FONTSIZE = 17
-LABEL_FONTSIZE = 14
-TICK_FONTSIZE = 12
-LEGEND_FONTSIZE = 12
+# Publication body-text spec (Nature/Cell): 7-9pt sans-serif. Titles slightly
+# larger but still ≤12pt so multi-panel figures composited at journal width
+# remain readable without rescaling.
+TITLE_FONTSIZE = 11
+LABEL_FONTSIZE = 9
+TICK_FONTSIZE = 8
+LEGEND_FONTSIZE = 8
+PANEL_LABEL_FONTSIZE = 12
 LINEWIDTH = 2.4
 AXIS_COLOR = "#222222"
 
@@ -40,7 +44,7 @@ def apply_theme() -> None:
     sns.set_theme(style="ticks", context="paper")
     plt.rcParams.update({
         "font.family": "DejaVu Sans",
-        "font.size": 12,
+        "font.size": 9,
         "axes.titlesize": TITLE_FONTSIZE,
         "axes.labelsize": LABEL_FONTSIZE,
         "axes.labelweight": "bold",
@@ -57,6 +61,20 @@ def apply_theme() -> None:
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
     })
+
+
+def panel_label(ax, letter: str, *, x: float = -0.10, y: float = 1.05,
+                fontsize: int | None = None) -> None:
+    """Place a bold A/B/C panel label in axes-fraction coordinates.
+
+    Standard Nature/Cell convention: bold capital letter just outside the
+    upper-left corner of each subplot. Defaults are tuned so the label
+    sits clear of titles and ticks for typical 6-8 inch panels; pass
+    custom (x, y) for tighter layouts.
+    """
+    fs = fontsize if fontsize is not None else PANEL_LABEL_FONTSIZE
+    ax.text(x, y, letter, transform=ax.transAxes,
+            fontsize=fs, fontweight="bold", va="bottom", ha="left")
 
 
 def style_axis(ax) -> None:

@@ -33,7 +33,8 @@ deep dive.
 - **features** — element decomposition, region-stratified heatmaps, phase-space contour, base-pairing-distance ECDFs.
 - **window** — whole-transcript fold-and-compare trace per gene (DMS-derived vs configured-span engine fold; `--engine vienna|rnastructure`).
 - **local-probability** — ViennaRNA RNAplfold per-position pair-probability track per gene, overlaid against the DMS-derived dot-bracket (smoothed paired-fraction track + signed Δ); emits per-window agreement and a TIS-vs-CDS-background summary with circular-shift empirical p-values.
-- **significance** — per-gene dinucleotide-shuffle z-score with empirical p-value (the only null-model test); optional within-gene structural-change scan flagging candidate transition peaks (within-gene Z, not a statistical test).
+- **structure-deviation** — region-discovery pass on top of the RNAplfold-vs-DMS comparison; calls intervals where `P_model − P_DMS` exceeds a threshold and classifies each region as `model_high_dms_low` (DMS-open / thermodynamically foldable), `model_low_dms_high` (DMS-protected / nonlocally paired), `concordant_paired`, `concordant_open`, `mixed_deviation`, or `ambiguous`. Emits per-gene four-panel plots, a per-species lollipop summary, and a cross-gene architectural-bin heatmap.
+- **significance** — *(legacy; not run by default)* per-gene dinucleotide-shuffle z-score with empirical p-value; optional within-gene structural-change scan flagging candidate transition peaks (within-gene Z, not a statistical test). Biological interpretation has moved to `structure-deviation`; invoke `significance` directly only when you want the thermodynamic-null QC.
 - **tis** — TIS −50/+50 nt zoom; honors 5'UTR when present, clamps at the 5'-end when not.
 - **substitution** — synonymous-recoding ΔG permutation test (flat-GC / positional-GC / synonymous null pools, all folded under plain Vienna MFE so the wild-type vs pool comparison is apples-to-apples). The DMS reference ΔG is recomputed by Vienna `eval_structure` on the `.db` dot-bracket — the `.db` header MFE is intentionally bypassed.
 - **cofold** — CoFold (α, τ) parameter sweep against the DMS ΔG. CoFold is the co-transcriptional folding model of [Proctor & Meyer (2013, *NAR*)](https://academic.oup.com/nar/article/41/19/9090/2411166), which adds a soft penalty `f(d) = α · (1 − exp(−d/τ))` to every candidate base pair of sequence distance `d`. **α** (alpha, kcal/mol) is the asymptotic penalty strength — larger values discourage long-range pairs more strongly. **τ** (tau, nt) is the decay constant — the distance at which the penalty reaches `α·(1 − 1/e) ≈ 0.63·α`; small `τ` makes the penalty bite at short range, large `τ` lets short loops form freely and only penalizes truly long-range contacts. CoFold's published defaults (α = 0.5, τ = 640 nt) correspond to a transcription speed of ~50 nt/s with a ~12.8 s pairing window. The sweep grids both axes and picks the `(α, τ)` that best matches the experimental DMS ΔG per gene.
@@ -57,8 +58,8 @@ deep dive.
 ## Installation
 
 ```bash
-git clone <repo-url>
-cd mtrnafeat
+git clone https://github.com/Ahram-Ahn/mtRNAFeat.git
+cd mtRNAFeat
 python -m venv .venv && source .venv/bin/activate
 pip install -e .                         # core
 ```
@@ -235,7 +236,8 @@ constraints is still a model.
 | [landscape](docs/STAGES.md#landscape) | GC-gradient sim + experimental overlay | `landscape/landscape_overlay.svg`, `gc_gradient.csv`, `pairing_bias_{GC,AU,GU}.svg` |
 | [features](docs/STAGES.md#features) | element decomposition + heatmaps + ECDFs | `features/raw_motifs.csv`, `heatmap_size_ratios.svg`, `phase_space_contour.svg`, `span_boxplot.svg` |
 | [window](docs/STAGES.md#window) | whole-transcript fold-and-compare trace | `window/window_{species}_{gene}.svg`, `window_per_position.csv`, `window_summary.csv` |
-| [local-probability](docs/STAGES.md#local-probability) | RNAplfold per-position pair probabilities + DMS overlay | `local_probability/local_probability_per_position.csv`, `local_probability_per_window.csv`, `local_probability_TIS_summary.csv`, per-gene `.svg` |
+| [local-probability](docs/STAGES.md#local-probability) | RNAplfold per-position pair probabilities + DMS overlay | `local_probability/local_probability_per_position.csv`, `local_probability_per_window.csv`, `local_probability_TIS_summary.csv`, `local_probability_TIS_sensitivity.csv`, per-gene `.svg` |
+| [structure-deviation](docs/STAGES.md#structure-deviation) | RNAplfold-vs-DMS deviation regions (called, classified, summarized) | `structure_deviation/structure_deviation_per_position.csv`, `structure_deviation_regions.csv`, `structure_deviation_gene_summary.csv`, `structure_deviation_gene_region_matrix.csv`, per-gene SVG, per-species lollipop SVG, cross-gene heatmap SVG |
 | [significance](docs/STAGES.md#significance) | dinuc-shuffle z-scores (+ optional cotrans scan) | `significance/z_per_gene.csv`, `cotrans_per_window.csv` (with `--scan`) |
 | [tis](docs/STAGES.md#tis) | −50/+50 nt TIS zoom | `tis/tis_dms_vs_mfe.csv`, `tis_zoom_grid.svg` |
 | [substitution](docs/STAGES.md#substitution) | synonymous-recoding ΔG perm test (Vienna MFE) | `substitution/substitution_thermo_distribution.csv`, `tables/substitution_thermo_summary.csv` |
@@ -279,6 +281,7 @@ runs/<your-run>/
 ├── features/            motifs, spans, region table, heatmaps, phase-space contour, span ECDFs
 ├── window/              per-gene whole-transcript trace + per-position + summary CSVs
 ├── local_probability/   per-gene RNAplfold pair-probability tracks + DMS overlay (per-position, per-window, TIS summary CSVs)
+├── structure_deviation/ per-position + region + gene-summary + gene-region-matrix CSVs; per-gene 4-panel SVG; per-species lollipop SVG; cross-gene heatmap SVG
 ├── significance/        z_per_gene.csv (+ cotrans_per_window.csv and per-gene plots when --scan)
 ├── tis/                 TIS −50/+50 zoom CSV + plot
 ├── substitution/        permutation distribution CSV + per-species KDE panels + per-species z heatmap
@@ -368,6 +371,7 @@ ruff check src tests                     # lint
 
 - [docs/STAGES.md](docs/STAGES.md) — every subcommand: purpose, I/O, flags, notes.
 - [docs/CONFIG.md](docs/CONFIG.md) — every YAML config field explained.
+- [docs/FIGURES.md](docs/FIGURES.md) — every figure output: what is plotted, how to read each axis, source CSV.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — dev guide and conventions.
 - [CHANGELOG.md](CHANGELOG.md) — version history.
 
@@ -380,10 +384,12 @@ If you use mtrnafeat in academic work, please cite:
   author  = {Ahn, Ahram},
   title   = {mtrnafeat: Mitochondrial mRNA structural-feature analysis},
   year    = {2026},
-  url     = {<repo-url>},
-  version = {0.1.0}
+  url     = {https://github.com/Ahram-Ahn/mtRNAFeat},
+  version = {0.3.0}
 }
 ```
+
+A machine-readable [`CITATION.cff`](CITATION.cff) is also provided.
 
 ## License
 

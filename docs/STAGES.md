@@ -30,7 +30,8 @@ mtrnafeat substitution --config configs/all.yaml --outdir runs/x -- --n 1000 --m
 - [`features`](#features) — element decomposition, heatmaps, phase-space, span ECDFs
 - [`window`](#window) — whole-transcript fold-and-compare trace
 - [`local-probability`](#local-probability) — RNAplfold per-position pair probabilities
-- [`significance`](#significance) — dinucleotide-shuffle z-scores (+ optional cotrans scan)
+- [`structure-deviation`](#structure-deviation) — region-discovery on RNAplfold-vs-DMS deviation
+- [`significance`](#significance) — *(legacy; not run by `run-all`)* dinucleotide-shuffle z-scores (+ optional cotrans scan)
 - [`tis`](#tis) — −50/+50 nt zoom around start codon
 - [`substitution`](#substitution) — synonymous-recoding ΔG permutation
 - [`cofold`](#cofold) — CoFold (α, τ) parameter sweep
@@ -252,6 +253,14 @@ RNAplfold and DMS tracks so they're on the same scale),
   silently skipped here. The `Has_Full_Upstream_Context` flag is `False`
   whenever the requested upstream context exceeds the actual 5'UTR
   length — relevant for human mt-mRNAs whose 5'UTRs are 0–3 nt.
+- `local_probability/local_probability_TIS_sensitivity.csv` — same
+  per-gene rows repeated at every `(upstream, downstream)` pair in
+  `cfg.tis_window_sweep_pairs`. Tagged with `TIS_Window_Tag` (e.g.
+  `30_30`, `200_200`). A single fixed window hides signal in
+  long-5'UTR yeast genes (Yeast COX1 is unusually open at `-30/+30`,
+  `Empirical_P_TIS_Low_Ppaired ≈ 0.04`, but trivial at `-100/+100`)
+  and is structurally over-wide for human transcripts. Reviewers can
+  judge robustness from this table directly.
 - `local_probability/local_probability_{SPECIES}_{GENE}.{svg|png}` —
   per-gene plot. Four panels when DMS overlay is available (RNAplfold,
   DMS, signed Δ, architecture+TIS shading); falls back to the legacy
@@ -272,6 +281,127 @@ RNAplfold and DMS tracks so they're on the same scale),
 
 The RNAplfold defaults match ViennaRNA's published defaults
 (`-W 80 -L 50 -c 0.001`).
+
+---
+
+## structure-deviation
+
+**Purpose.** Region-discovery layer on top of the RNAplfold-vs-DMS
+comparison. The `local-probability` stage answers *"what does local
+pairing probability look like along the transcript?"*; this stage
+answers *"where does the DMS-derived native structure diverge from
+local thermodynamic folding potential, and what biological class is
+each diverging region?"* It is **not** a re-skinned RNAplfold plot —
+it is a region-centered output with class labels, gene architecture
+context, and effect-size summaries.
+
+**Core signal (per-position, smoothed).**
+
+```
+P_model(i) = RNAplfold local pairing probability
+P_DMS(i)   = DMS dot-bracket paired binary (smoothed)
+deviation_smooth(i) = P_model_smooth(i) − P_DMS_smooth(i)
+```
+
+**Region calling.** Intervals where `|deviation_smooth| ≥ threshold`
+(default `0.25`), at least `min_region_length` nt long (default `25`),
+with same-sign intervals separated by `≤ merge_gap` (default `10`)
+merged before length filtering.
+
+**Region classes.** Each called region is classified into one of:
+
+| Class | Criteria | Biological reading |
+|---|---|---|
+| `model_high_dms_low` | `mean_model ≥ 0.50`, `mean_dms ≤ 0.30`, `mean_dev ≥ +0.25` | Thermodynamically foldable but experimentally open — initiation/ribosome opening, RBP/helicase remodeling, active unfolding |
+| `model_low_dms_high` | `mean_model ≤ 0.30`, `mean_dms ≥ 0.50`, `mean_dev ≤ −0.25` | Experimentally paired/protected beyond the local model — RBP protection, nonlocal/RNP-stabilized pairing |
+| `concordant_paired` | both ≥ 0.50, `|mean_dev| < 0.25` | Locally encoded paired structural element |
+| `concordant_open` | both ≤ 0.30, `|mean_dev| < 0.25` | Intrinsically open / unstructured segment |
+| `mixed_deviation` | `|mean_dev| ≥ 0.25` but high/low cutoffs not met | Intermediate — inspect manually |
+| `ambiguous` | weak / mixed signal | Do not overinterpret |
+
+Called regions (which by definition pass the deviation threshold)
+return one of `model_high_dms_low`, `model_low_dms_high`, or
+`mixed_deviation`. The `concordant_*` and `ambiguous` labels apply to
+gene-level summaries / heatmap bins where no thresholding is applied.
+
+**Reads:** `cfg.rnaplfold_window`, `cfg.rnaplfold_max_bp_span`,
+`cfg.rnaplfold_cutoff`, `cfg.rolling_window`,
+`cfg.structure_deviation_threshold`,
+`cfg.structure_deviation_min_region_length`,
+`cfg.structure_deviation_merge_gap`,
+`cfg.structure_deviation_high_threshold`,
+`cfg.structure_deviation_low_threshold`,
+`cfg.structure_deviation_tis_upstream`,
+`cfg.structure_deviation_tis_downstream`,
+`cfg.structure_deviation_stop_upstream`,
+`cfg.structure_deviation_stop_downstream`,
+`cfg.structure_deviation_early_cds_nt`,
+`cfg.structure_deviation_top_labels`,
+`cfg.db_files`, `cfg.target_genes`.
+
+**Writes:**
+- `structure_deviation/structure_deviation_per_position.csv` — every
+  position carries `Model_Paired_*`, `DMS_Paired_*`, `Deviation_*`,
+  `Distance_To_Start`, `Distance_To_Stop`, `CDS_Phase`, and
+  `Local_GC_Fraction`/`Local_AU_Fraction`.
+- `structure_deviation/structure_deviation_regions.csv` — one row per
+  called region with coordinates, gene-architecture annotation
+  (`Transcript_Region_Majority`, `Overlaps_TIS_Window`,
+  `Distance_To_Start_*`, `Distance_To_Stop_Midpoint`), effect sizes
+  (`Mean_Deviation`, `Abs_Mean_Deviation`, `Max_Abs_Deviation`,
+  `Integrated_Deviation`), composition (`GC_Fraction`, `AU_Fraction`,
+  per-base `*_Fraction`), DMS pair-span statistics
+  (`Mean_DMS_Pair_Span`, `Fraction_DMS_Pairs_Span_gt_{50,100,300}`),
+  and the `Region_Class` + `Interpretation_Label` pair.
+- `structure_deviation/structure_deviation_gene_summary.csv` — one row
+  per gene: deviation burden, class counts, TIS / early-CDS /
+  stop-proximal mean signals, and DMS long-range pair-span fractions.
+- `structure_deviation/structure_deviation_gene_region_matrix.csv` —
+  long-format means per (gene × architectural bin):
+  `5_end / TIS / early_CDS / mid_CDS / late_CDS / stop_proximal /
+  3_end`. Drives the cross-gene heatmap.
+- `structure_deviation/structure_deviation_{SPECIES}_{GENE}.{svg|png}`
+  — four-panel per-gene plot (model, DMS, signed Δ with class-colored
+  region rectangles, architecture + class-colored region blocks).
+- `structure_deviation/structure_deviation_lollipop_{SPECIES}.{svg|png}`
+  — per-species summary; one row per gene, lollipop at each region
+  midpoint, stem-length proportional to `|mean Δ|`, dot size
+  proportional to length, color = class.
+- `structure_deviation/structure_deviation_heatmap.{svg|png}` —
+  cross-gene heatmap of `Mean_Deviation` per architectural bin
+  (diverging RdBu colormap centered on zero).
+
+**Flags (after `--`)**:
+| Flag | Type | Effect |
+|------|------|--------|
+| `--threshold F` | float | deviation magnitude threshold for region calling (default `cfg.structure_deviation_threshold` = 0.25). |
+| `--min-region-length N` | int | minimum region length in nt (default 25). |
+| `--merge-gap N` | int | merge gap between same-sign regions (default 10). |
+| `--high-threshold F` | float | paired-fraction "high" cutoff for class labels (default 0.50). |
+| `--low-threshold F` | float | paired-fraction "low" cutoff for class labels (default 0.30). |
+| `--top-labels N` | int | reserved (top-region annotation count). |
+| `--no-plots` | flag | skip plot generation; CSVs only. |
+| `--only-species NAME` | str | restrict to one species. |
+| `--only-gene NAME` | str | restrict to one gene. |
+
+**Recommended manuscript framing.** Avoid wording like "we identify
+significant MFE z-score peaks." Use instead: *"We identify DMS-model
+deviation regions"*, then describe each by class. Example sentences:
+*"Yeast COX3 contains a TIS-proximal model-high/DMS-low region,
+suggesting that the start codon neighborhood is experimentally more
+open than expected from local thermodynamic folding potential."*
+*"Human ND1 contains an internal CDS DMS-high/model-low region,
+consistent with experimentally paired/protected structure beyond what
+the local sequence-encoded model predicts."*
+
+**Relationship to `significance`.** This stage replaces the
+biological-interpretation role that the old `significance --scan`
+served. The legacy `significance` command is preserved for users who
+need the dinuc-shuffle z-score / null-model QC, but it is **no longer
+invoked by `run-all`** (the dinuc-shuffle null pool was the slowest
+stage; removing it from the default pipeline cuts wall-clock time
+substantially). To run it explicitly:
+``mtrnafeat significance --config configs/all.yaml --outdir runs/sig -- --scan``.
 
 ---
 
@@ -316,10 +446,13 @@ defaults).
 | `--window N` | int | sliding-mode window size (default 120). |
 | `--step N` | int | prefix-mode growth step or sliding stride (default 30). |
 | `--z-threshold T` | float | peak threshold for the smoothed Δ signals (default 2.0). |
-| `--per-window` | flag | deprecated alias for `--scan` (preserved so `run-all` keeps working). |
+| `--per-window` | flag | deprecated alias for `--scan` (preserved for backward compatibility with older scripts). |
 
-`run-all` invokes `significance` with `--per-window`, so the cotrans
-scan runs by default in the full pipeline.
+`significance` is **not** invoked by `run-all` — the
+`structure-deviation` stage now carries the biological-interpretation
+role. Run `significance` directly when you want the
+dinucleotide-shuffle z-score / null-model QC; see "Relationship to
+`significance`" above.
 
 ---
 
@@ -586,13 +719,14 @@ invocation. Stages have no cross-stage data dependencies, so
 [src/mtrnafeat/commands/pipeline.py](../src/mtrnafeat/commands/pipeline.py)):
 
 `stats`, `landscape`, `features`, `window`, `local_probability`,
-`significance`, `tis`, `compare`, `substitution`, `cofold`, `gene_panel`.
+`structure_deviation`, `tis`, `compare`, `substitution`, `cofold`,
+`gene_panel`.
 
-`run-all` also passes `--per-window` to `significance` automatically, so
-the cotrans scan runs by default.
-
-**Stages NOT run**: `kinetic` (opt-in only — requires DrTransformer on
-PATH), `plot` (re-render utility).
+**Stages NOT run**: `significance` (legacy thermodynamic-null QC —
+`structure-deviation` now covers the biological interpretation;
+invoke `mtrnafeat significance ... -- --scan` explicitly when you
+want it), `kinetic` (opt-in only — requires DrTransformer on PATH),
+`plot` (re-render utility).
 
 **Reads**: every config field consumed by the included stages.
 **Writes**: every output of the included stages, under `cfg.outdir`.
@@ -613,3 +747,84 @@ mtrnafeat run-all --parallel --skip significance,cofold --config configs/all.yam
 # matches what examples/01_smoke_mini.sh does):
 mtrnafeat run-all --config test_data/mini.config.yaml --outdir runs/smoke -- --skip kinetic
 ```
+
+---
+
+## Adapting to a new dataset
+
+The pipeline is tightly coupled to the bundled mt-mRNA gene set (Human +
+Yeast). Adding a new organism, transcript class, or `.db` file requires
+the following touch points — none are CLI flags today; all are
+config + small code edits:
+
+1. **Convert your input to the 3-line `.db` format.** Every stage reads
+   the same parser (`src/mtrnafeat/io/db_parser.py`):
+   ```
+   >GENE_NAME: -123.4 kcal/mol
+   ACGUACGU...
+   ((((....))))...
+   ```
+   FASTA / CT / BED / VCF are *not* supported. The header ΔG is
+   ignored at runtime — every ΔG is recomputed via Vienna `eval_structure`,
+   so any non-zero placeholder is fine.
+
+2. **Register the gene name** in
+   [`src/mtrnafeat/constants.py`](../src/mtrnafeat/constants.py) by
+   appending to `EXPECTED_GENES`. If your gene name uses `/` or other
+   path-unsafe characters, also add an alias to `GENE_ALIASES`.
+
+3. **Add a transcript-architecture row** in
+   [`src/mtrnafeat/io/annotations.py`](../src/mtrnafeat/io/annotations.py)
+   (the inline `_HUMAN` / `_YEAST` DataFrames). The TIS, structure-
+   deviation, gene-panel, and substitution stages all call
+   `annotation_for(species, gene)` and will raise `KeyError` on an
+   unknown gene. Provide at minimum: `Length`, `L_5UTR`, `L_CDS`,
+   `L_3UTR`. For non-mRNA inputs (pre-tRNA, ncRNA), set `L_5UTR=0`,
+   `L_CDS=length`, `L_3UTR=0` — but be aware that CDS-relative bins
+   (`structure_deviation_early_cds_nt = 300`) and TIS context windows
+   (`tis_upstream_nt`, `tis_downstream_nt`) assume mRNA-scale lengths;
+   short transcripts will produce empty or spurious region tables.
+
+4. **Update the YAML** (`configs/template.yaml` or your own copy) with:
+   - `db_files: { <SpeciesName>: <new.db> }`
+   - `target_genes:` — the gene whitelist used by every stage's
+     `(species × target_genes)` iteration
+   - `sim_gc_conditions:` — defaults are tuned to mtDNA GC ranges
+     (7–46%); rebuild for your organism's empirical GC distribution
+   - `sim_freqs_per_species:` — leave `{}` to compute from the new
+     `.db` files at runtime, or override for strand-specific composition
+
+After (1)–(4), `mtrnafeat validate-inputs --config <new.yaml>` will
+flag any remaining bracket/length mismatches before the analysis runs.
+
+### Stage independence and ordering
+
+Every stage in `INDEPENDENT` (see
+[`src/mtrnafeat/commands/pipeline.py`](../src/mtrnafeat/commands/pipeline.py))
+reads only `cfg` + `.db` files and writes to its own subfolder under
+`cfg.outdir`. There are no cross-stage file dependencies — stages can
+be re-run individually in any order.
+
+`local-probability` and `structure-deviation` *share underlying analysis
+code* (both invoke `RNAplfold` via `analysis.local_probability`), but
+each runs its own RNAplfold pass; deleting one stage's output does not
+break the other.
+
+### Sequence-validation gotchas
+
+- The alphabet check in `src/mtrnafeat/core/validation.py` accepts only
+  `ACGU` (uppercase, T → U up-front). Ambiguous bases (N, Y, R, …) are
+  rejected; the pipeline does not soft-mask. Pre-clean any consensus or
+  alignment input before constructing the `.db` file.
+- Sequences shorter than the rolling-window width (default 25 nt) will
+  produce all-NaN smoothed tracks; very short transcripts (< 60 nt) are
+  best routed through a separate small-RNA pipeline.
+- `cfg.substitution_max_nt` (default 300 nt) caps codon-truncation in the
+  substitution permutation stage. For transcripts > 300 nt, the
+  substitution test examines only the first 300 nt — defensible for
+  start-codon-biased structure but conservative for full-length
+  comparisons. Override per run if your biology requires the full
+  transcript.
+- `cofold_tau` (default 640 nt) assumes ~12 s pairing window at 50 nt/s
+  transcription. For substantially longer ncRNAs, sweep `cofold_tau`
+  upward to capture slow co-transcriptional refolding events.

@@ -69,6 +69,11 @@ def _parse(args: list[str] | None) -> dict:
             out["step"] = int(next(it))
         elif tok == "--z-threshold":
             out["z_threshold"] = float(next(it))
+        else:
+            raise SystemExit(
+                f"significance: unknown flag {tok!r}. See module docstring "
+                "for the supported flag list."
+            )
     return out
 
 

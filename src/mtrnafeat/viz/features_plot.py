@@ -52,7 +52,7 @@ def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, 
         col_labels = [m for _, m in ordered_cols]
         pivot.columns = col_labels
 
-        sns.heatmap(pivot, ax=ax, cmap="Reds", annot=False, linewidths=0.5, square=True,
+        sns.heatmap(pivot, ax=ax, cmap="viridis", annot=False, linewidths=0.5, square=True,
                     cbar_kws={"label": "Enrichment (%)", "shrink": 0.7})
         ax.xaxis.tick_top()
         ax.xaxis.set_label_position("top")
@@ -122,7 +122,9 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     for ax, sp in zip(axes, species_list):
         sim_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "Sim")]
         exp_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "DMS")]
-        cmap = "Reds" if sp == "Human" else "Oranges"
+        # Per-species sim-cloud cmap: keep them distinct yet both
+        # colorblind-safe (viridis sequential vs cividis sequential).
+        cmap = "viridis" if sp == "Human" else "cividis"
         sim_drawn = False
         if not sim_sub.empty:
             try:

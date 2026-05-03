@@ -58,7 +58,7 @@ def _gap_strip_for_species(species_full: pd.DataFrame, species: str,
 
     sns.stripplot(
         data=df, x="Gene", y="Abs_Gap", hue="tau",
-        palette="plasma", size=6.5, alpha=0.85, jitter=0.18,
+        palette="cividis", size=6.5, alpha=0.85, jitter=0.18,
         dodge=False, ax=ax,
     )
 
@@ -142,7 +142,7 @@ def _corr_grid_for_species(species_win: pd.DataFrame, species: str,
     for ax in axes.flat[n:]:
         ax.axis("off")
     taus = sorted(species_win["tau"].unique())
-    cmap = sns.color_palette("plasma", len(taus))
+    cmap = sns.color_palette("cividis", len(taus))
     for ax, gene in zip(axes.flat, genes):
         sub = species_win[species_win["Gene"] == gene]
         for color, tau in zip(cmap, taus):

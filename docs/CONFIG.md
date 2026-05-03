@@ -23,6 +23,16 @@ value for that run only.
   `rnaplfold_window`, `rnaplfold_max_bp_span`, `rnaplfold_cutoff`,
   `local_probability_scan_window_nt`, `local_probability_scan_step_nt`,
   `tis_upstream_nt`, `tis_downstream_nt`, `tis_n_circular_shifts`,
+  `tis_window_sweep_pairs`,
+  `structure_deviation_threshold`,
+  `structure_deviation_min_region_length`,
+  `structure_deviation_merge_gap`,
+  `structure_deviation_high_threshold`,
+  `structure_deviation_low_threshold`,
+  `structure_deviation_tis_upstream`, `structure_deviation_tis_downstream`,
+  `structure_deviation_stop_upstream`, `structure_deviation_stop_downstream`,
+  `structure_deviation_early_cds_nt`, `structure_deviation_top_labels`,
+  `structure_deviation_null_model`, `structure_deviation_n_null`,
   `window_nt`, `step_nt`, `max_bp_span`, `window_size_sweep`,
   `fold_engine`
 - [CoFold](#cofold) — `cofold_alpha`, `cofold_tau`, `cofold_alpha_sweep`,
@@ -225,6 +235,17 @@ probability` runs RNAplfold and reports a continuous pair probability.
 - **Used by**: `local-probability` (TIS summary).
 - **CLI override**: `mtrnafeat local-probability … -- --tis-downstream N`.
 
+### `tis_window_sweep_pairs`
+- **Type**: tuple[tuple[int, int], ...] · **Default**: `((30, 30), (50, 50), (100, 100), (200, 200), (500, 500))`
+- **Controls**: a sensitivity sweep over TIS context widths. The same
+  TIS-summary computation is run at every `(upstream, downstream)` pair
+  here and emitted to `local_probability_TIS_sensitivity.csv` next to
+  the primary `local_probability_TIS_summary.csv`. A single fixed
+  `-50/+50` window hides signal in long-5'UTR yeast genes (Yeast COX1
+  is unusually open at `-30/+30` but reads trivial at `-100/+100`) and
+  is structurally over-wide for human mt-mRNAs whose 5'UTRs are 0-3 nt.
+- **Used by**: `local-probability` (sensitivity table).
+
 ### `tis_n_circular_shifts`
 - **Type**: int · **Default**: `1000`
 - **Controls**: number of circular-shift draws used to compute the TIS
@@ -235,6 +256,80 @@ probability` runs RNAplfold and reports a continuous pair probability.
   transcript.
 - **Used by**: `local-probability` (TIS summary).
 - **CLI override**: `mtrnafeat local-probability … -- --tis-n-shuffles N`.
+
+### `structure_deviation_threshold`
+- **Type**: float · **Default**: `0.25`
+- **Controls**: minimum smoothed `|P_model − P_DMS|` magnitude required
+  to call a region in the `structure-deviation` stage.
+- **Used by**: [`structure-deviation`](STAGES.md#structure-deviation).
+- **CLI override**: `mtrnafeat structure-deviation … -- --threshold F`.
+
+### `structure_deviation_min_region_length`
+- **Type**: int · **Default**: `25`
+- **Controls**: minimum region length in nt; intervals shorter than
+  this are dropped after merging.
+- **Used by**: `structure-deviation`.
+- **CLI override**: `--min-region-length N`.
+
+### `structure_deviation_merge_gap`
+- **Type**: int · **Default**: `10`
+- **Controls**: same-sign regions separated by ≤ this gap are merged
+  before length filtering.
+- **Used by**: `structure-deviation`.
+- **CLI override**: `--merge-gap N`.
+
+### `structure_deviation_high_threshold`
+- **Type**: float · **Default**: `0.50`
+- **Controls**: paired-fraction "high" cutoff used by the
+  region-class assignment.
+- **Used by**: `structure-deviation`.
+- **CLI override**: `--high-threshold F`.
+
+### `structure_deviation_low_threshold`
+- **Type**: float · **Default**: `0.30`
+- **Controls**: paired-fraction "low" cutoff used by the
+  region-class assignment.
+- **Used by**: `structure-deviation`.
+- **CLI override**: `--low-threshold F`.
+
+### `structure_deviation_tis_upstream` / `structure_deviation_tis_downstream`
+- **Type**: int · **Defaults**: `30` / `60`
+- **Controls**: TIS context window (nt) used to flag
+  `Overlaps_TIS_Window` on each called region and to compute the
+  TIS-aggregated metrics in `structure_deviation_gene_summary.csv`.
+- **Used by**: `structure-deviation`.
+
+### `structure_deviation_stop_upstream` / `structure_deviation_stop_downstream`
+- **Type**: int · **Defaults**: `60` / `30`
+- **Controls**: stop-codon context window (nt). Same role as the TIS
+  window but at the 3′ end of the CDS.
+- **Used by**: `structure-deviation`.
+
+### `structure_deviation_early_cds_nt`
+- **Type**: int · **Default**: `300`
+- **Controls**: 3′ extent of the `early_CDS` heatmap bin (positions
+  `tis_downstream` to `early_cds_nt` from the start codon).
+- **Used by**: `structure-deviation`.
+
+### `structure_deviation_top_labels`
+- **Type**: int · **Default**: `5`
+- **Controls**: reserved — formerly the count of top-|Δ| region labels
+  drawn inline on the deviation panel; current per-gene plots use the
+  bottom legend + colored region rectangles only.
+- **Used by**: `structure-deviation`.
+- **CLI override**: `--top-labels N`.
+
+### `structure_deviation_null_model`
+- **Type**: str · **Default**: `"none"` · **Values**: `"none"`, `"dinuc"` (planned)
+- **Controls**: optional region-level null model. ``"none"`` (default)
+  emits effect sizes only.
+- **Used by**: `structure-deviation` (Phase 3 / planned).
+
+### `structure_deviation_n_null`
+- **Type**: int · **Default**: `0`
+- **Controls**: number of null replicates when
+  `structure_deviation_null_model != "none"`.
+- **Used by**: `structure-deviation` (Phase 3 / planned).
 
 ### `window_nt`
 - **Type**: int · **Default**: `120`

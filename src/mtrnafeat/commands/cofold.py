@@ -23,6 +23,10 @@ def _parse(args: list[str] | None) -> dict:
     for tok in args:
         if tok == "--no-window-corr":
             out["do_window_corr"] = False
+        else:
+            raise SystemExit(
+                f"cofold: unknown flag {tok!r}. Supported: --no-window-corr."
+            )
     return out
 
 

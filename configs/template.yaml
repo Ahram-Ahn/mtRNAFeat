@@ -124,6 +124,45 @@ tis_upstream_nt: 50
 tis_downstream_nt: 50
 tis_n_circular_shifts: 1000
 
+# Sensitivity sweep over TIS context widths. A single fixed window
+# (e.g. -50/+50 nt) hides signal in long-5'UTR yeast genes and reads
+# trivially in human transcripts whose 5'UTR is 0-3 nt. Each
+# (upstream, downstream) pair below is summarized in
+# local_probability_TIS_sensitivity.csv next to the primary table —
+# reviewers can judge robustness rather than rely on one default.
+tis_window_sweep_pairs:
+  - [30, 30]
+  - [50, 50]
+  - [100, 100]
+  - [200, 200]
+  - [500, 500]
+
+# ─────────────────── structure-deviation ───────────────────
+# Region-discovery pass. Calls intervals where RNAplfold local pairing
+# probability and the DMS-derived paired fraction diverge by at least
+# `structure_deviation_threshold` (smoothed track), classifies each
+# region into one of {model_high_dms_low, model_low_dms_high,
+# concordant_paired, concordant_open, mixed_deviation, ambiguous}, and
+# emits a per-gene four-panel plot plus a species-level lollipop and a
+# cross-gene heatmap.
+structure_deviation_threshold: 0.25
+structure_deviation_min_region_length: 25
+structure_deviation_merge_gap: 10
+structure_deviation_high_threshold: 0.50
+structure_deviation_low_threshold: 0.30
+structure_deviation_tis_upstream: 30
+structure_deviation_tis_downstream: 60
+structure_deviation_stop_upstream: 60
+structure_deviation_stop_downstream: 30
+structure_deviation_early_cds_nt: 300
+structure_deviation_top_labels: 5
+# Optional region-level null. "none" (default) emits effect sizes only.
+# "dinuc" runs a per-gene dinucleotide-shuffle null and max-statistic
+# correction across called regions; only run when an explicit
+# `--n-null N` is provided on the CLI.
+structure_deviation_null_model: none
+structure_deviation_n_null: 0
+
 # Sliding-window length / step (nt). The current `window` command folds
 # the whole transcript and does not slide; these fields are still read by
 # the `cofold` per-window correlation pass and the `significance --scan`
