@@ -1,12 +1,18 @@
 """Structure-deviation analysis: where does the DMS-derived native
-structure diverge from local thermodynamic folding potential, and
+structure diverge from the global thermodynamic MFE structure, and
 what biological class does each region belong to?
 
 Per-position signal::
 
-    P_model(i) = RNAplfold local pairing probability
+    P_model(i) = global RNAfold MFE paired indicator (smoothed)
     P_DMS(i)   = DMS dot-bracket paired fraction (smoothed)
     deviation(i) = P_model(i) − P_DMS(i)
+
+Both tracks are paired-binary vectors derived from a single dot-bracket
+(MFE on one side, DMS on the other) and smoothed with the same centered
+rolling mean, so the comparison is symmetric. This mirrors the
+``local_probability`` stage but swaps the local RNAplfold marginals for
+the global MFE structure.
 
 Region calling on the smoothed deviation track yields intervals; each
 region is classified into one of:
@@ -34,10 +40,10 @@ import pandas as pd
 from mtrnafeat.analysis.local_probability import (
     _centered_rolling_mean,
     paired_binary_from_dotbracket,
-    scan_one_gene,
 )
 from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
+from mtrnafeat.core import thermo
 from mtrnafeat.core.shuffle import dinuc_shuffle
 from mtrnafeat.core.stats import bh_fdr
 from mtrnafeat.core.structure import extract_pairs
@@ -63,16 +69,15 @@ class DeviationResult:
     gene: str
     sequence: str
     dms_structure: str
-    p_model_raw: np.ndarray
+    mfe_structure: str
+    mfe_kcal: float
+    p_model_raw: np.ndarray  # 0/1 binary (paired in global MFE dot-bracket)
     p_model_smooth: np.ndarray
     p_dms_raw: np.ndarray  # 0/1 binary (paired in DMS dot-bracket)
     p_dms_smooth: np.ndarray
     deviation_raw: np.ndarray
     deviation_smooth: np.ndarray
     rolling_window: int
-    rnaplfold_window: int
-    rnaplfold_max_bp_span: int
-    rnaplfold_cutoff: float
 
 
 # ──────────────────────── Per-gene compute ────────────────────────
@@ -80,20 +85,21 @@ class DeviationResult:
 
 def compute_one_gene(species: str, gene: str, sequence: str,
                      dms_structure: str, *, cfg: Config) -> DeviationResult:
-    """Run RNAplfold + DMS overlay and build the smoothed deviation track."""
+    """Global RNAfold MFE + DMS overlay and the smoothed deviation track.
+
+    Both the model and DMS sides are paired-binary vectors derived from
+    a single dot-bracket (the global MFE on one side, the DMS-derived
+    structure on the other), smoothed with the same centered rolling
+    mean of width ``cfg.rolling_window``. The deviation is then a true
+    apples-to-apples comparison of paired fractions in the same window.
+    """
     if len(sequence) != len(dms_structure):
         raise ValueError(
             f"{species} {gene}: sequence length {len(sequence)} "
             f"!= DMS structure length {len(dms_structure)}"
         )
-    res = scan_one_gene(
-        species, gene, sequence,
-        window=cfg.rnaplfold_window,
-        max_bp_span=cfg.rnaplfold_max_bp_span,
-        cutoff=cfg.rnaplfold_cutoff,
-        dms_structure=dms_structure,
-    )
-    p_model_raw = res.p_paired
+    mfe_structure, mfe_kcal = thermo.fold_mfe(sequence)
+    p_model_raw = paired_binary_from_dotbracket(mfe_structure).astype(float)
     p_dms_raw = paired_binary_from_dotbracket(dms_structure).astype(float)
     smooth_w = int(cfg.rolling_window)
     p_model_smooth = _centered_rolling_mean(p_model_raw, smooth_w)
@@ -105,6 +111,8 @@ def compute_one_gene(species: str, gene: str, sequence: str,
         gene=canonical_gene(gene),
         sequence=sequence,
         dms_structure=dms_structure,
+        mfe_structure=mfe_structure,
+        mfe_kcal=float(mfe_kcal),
         p_model_raw=p_model_raw,
         p_model_smooth=p_model_smooth,
         p_dms_raw=p_dms_raw,
@@ -112,9 +120,6 @@ def compute_one_gene(species: str, gene: str, sequence: str,
         deviation_raw=deviation_raw,
         deviation_smooth=deviation_smooth,
         rolling_window=smooth_w,
-        rnaplfold_window=int(cfg.rnaplfold_window),
-        rnaplfold_max_bp_span=int(cfg.rnaplfold_max_bp_span),
-        rnaplfold_cutoff=float(cfg.rnaplfold_cutoff),
     )
 
 
@@ -285,18 +290,17 @@ def compute_null_max_stats(
     p_dms_smooth: np.ndarray,
     *,
     rolling_window: int,
-    rnaplfold_window: int,
-    rnaplfold_max_bp_span: int,
-    rnaplfold_cutoff: float,
     n_null: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
     """Per-gene null distribution of max-|deviation| under dinucleotide shuffle.
 
     For each null draw, dinucleotide-shuffle the input sequence (Altschul-
-    Erikson, preserves dinucleotide composition), recompute RNAplfold
-    P(paired), smooth, and report the maximum absolute deviation against
-    the FIXED observed DMS-derived smoothed paired-fraction track.
+    Erikson, preserves dinucleotide composition), refold the shuffled
+    sequence with the global RNAfold MFE, convert the resulting
+    dot-bracket to a paired-binary track, smooth it the same way, and
+    report the maximum absolute deviation against the FIXED observed
+    DMS-derived smoothed paired-fraction track.
 
     The DMS track is treated as the experimental observation and held
     constant across nulls; only the thermodynamic prior is permuted.
@@ -310,15 +314,10 @@ def compute_null_max_stats(
     out = np.empty(int(n_null), dtype=float)
     for k in range(int(n_null)):
         shuffled = dinuc_shuffle(sequence, rng)
-        res_null = scan_one_gene(
-            "_null", "_null", shuffled,
-            window=int(rnaplfold_window),
-            max_bp_span=int(rnaplfold_max_bp_span),
-            cutoff=float(rnaplfold_cutoff),
-            dms_structure=None,
-        )
+        mfe_null, _ = thermo.fold_mfe(shuffled)
+        p_model_null_raw = paired_binary_from_dotbracket(mfe_null).astype(float)
         p_model_null_smooth = _centered_rolling_mean(
-            res_null.p_paired, int(rolling_window)
+            p_model_null_raw, int(rolling_window)
         )
         # Same minus operation as the primary deviation track.
         dev_null = p_model_null_smooth - p_dms_smooth
@@ -751,9 +750,6 @@ def scan_all(cfg: Config) -> dict:
                     result.sequence,
                     result.p_dms_smooth,
                     rolling_window=result.rolling_window,
-                    rnaplfold_window=result.rnaplfold_window,
-                    rnaplfold_max_bp_span=result.rnaplfold_max_bp_span,
-                    rnaplfold_cutoff=result.rnaplfold_cutoff,
                     n_null=n_null,
                     rng=null_rng,
                 )

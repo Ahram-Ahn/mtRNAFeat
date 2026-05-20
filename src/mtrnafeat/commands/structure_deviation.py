@@ -1,11 +1,14 @@
 """`mtrnafeat structure-deviation` — region-discovery on the
-RNAplfold-vs-DMS deviation track.
+global-MFE-vs-DMS deviation track.
 
-For every (species, gene) target, computes the smoothed signed
-deviation ``P_model(i) − P_DMS(i)``, calls intervals where the
-deviation passes a threshold, classifies each interval into one of
-{model_high_dms_low, model_low_dms_high, concordant_paired,
-concordant_open, mixed_deviation, ambiguous}, and emits:
+For every (species, gene) target, the model side is the global
+ViennaRNA MFE structure (paired-binary per position, smoothed) and
+the DMS side is the .db dot-bracket (paired-binary, same smoothing).
+Computes the smoothed signed deviation ``P_model(i) − P_DMS(i)``,
+calls intervals where the deviation passes a threshold, classifies
+each interval into one of {model_high_dms_low, model_low_dms_high,
+concordant_paired, concordant_open, mixed_deviation, ambiguous}, and
+emits:
 
     structure_deviation_per_position.csv
     structure_deviation_regions.csv
@@ -15,12 +18,14 @@ concordant_open, mixed_deviation, ambiguous}, and emits:
     structure_deviation_lollipop_{species}.{svg|png}  (one per species)
     structure_deviation_heatmap.{svg|png}             (cross-gene)
 
-This stage is the interpretation / region-discovery layer on top of
-``local-probability``. The two are complementary:
+This stage parallels ``local-probability`` but swaps the local
+RNAplfold marginals on the model side for the global MFE structure:
 
-    local-probability  — "what does local pairing probability look like?"
-    structure-deviation — "where does DMS diverge from the local model,
-                          and what biological class is each region?"
+    local-probability  — "what does *local* pairing probability look
+                          like vs DMS?" (RNAplfold, sliding window)
+    structure-deviation — "where does DMS diverge from the *global*
+                          MFE prediction, and what biological class is
+                          each region?" (RNAfold MFE, full transcript)
 
 Args (after ``--``):
     --threshold F           deviation magnitude threshold for region
@@ -166,14 +171,17 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
         # ``compute_one_gene`` returned data; the per-window helper
         # only reads ``.species``, ``.gene``, ``.sequence``,
         # ``.p_paired``, ``.dms_paired_binary``, ``.dms_structure``.
+        # ``p_paired`` here is the global MFE paired-binary vector, so
+        # the per-window aggregation reduces to mean MFE-paired fraction
+        # vs mean DMS-paired fraction in the same window.
         lp_like = lp_analysis.LocalProbResult(
             species=result.species,
             gene=result.gene,
             sequence=result.sequence,
             p_paired=result.p_model_raw,
-            window=result.rnaplfold_window,
-            max_bp_span=result.rnaplfold_max_bp_span,
-            cutoff=result.rnaplfold_cutoff,
+            window=0,
+            max_bp_span=0,
+            cutoff=0.0,
             dms_structure=result.dms_structure,
             dms_paired_binary=result.p_dms_raw.astype("int8"),
         )

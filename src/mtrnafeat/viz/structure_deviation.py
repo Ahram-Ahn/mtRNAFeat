@@ -10,8 +10,8 @@ The colour palette for region classes is fixed across plots so a reader
 can recognize a class at a glance regardless of which figure they're
 looking at::
 
-    model_high_dms_low   blue       (RNAplfold > DMS;  "DMS-open")
-    model_low_dms_high   brown      (DMS > RNAplfold;  "DMS-protected")
+    model_high_dms_low   blue       (MFE > DMS;  "DMS-open")
+    model_low_dms_high   brown      (DMS > MFE;  "DMS-protected")
     concordant_paired    dark grey  (both high)
     concordant_open      light grey (both low)
     mixed_deviation      purple
@@ -75,7 +75,8 @@ TIS_SHADE_ALPHA = 0.18
 # ──────────────────────── Per-gene figure ────────────────────────
 
 
-def _draw_class_legend(ax, classes_present: list[str]) -> None:
+def _draw_class_legend(fig, classes_present: list[str],
+                       extra_handles=None, extra_labels=None) -> None:
     handles = []
     labels = []
     for cls in CLASS_ORDER:
@@ -83,24 +84,23 @@ def _draw_class_legend(ax, classes_present: list[str]) -> None:
             handles.append(Rectangle((0, 0), 1, 1,
                                      color=CLASS_COLORS[cls], alpha=0.55))
             labels.append(CLASS_SHORT_LABEL[cls])
+    if extra_handles:
+        handles.extend(extra_handles)
+        labels.extend(extra_labels or [])
     if not handles:
         return
-    ax.legend(handles, labels,
-              loc="upper center", bbox_to_anchor=(0.5, -0.55),
-              ncol=min(3, len(handles)),
-              frameon=False, fontsize=9, borderaxespad=0.0)
+    fig.legend(handles, labels,
+               loc="lower center", bbox_to_anchor=(0.5, 0.0),
+               ncol=min(4, len(handles)),
+               frameon=True, framealpha=0.9, fontsize=9)
 
 
 def _gene_subtitle(annot: dict | None, result: DeviationResult,
                    tis_up: int, tis_down: int) -> str:
-    parts = [
-        f"W={result.rnaplfold_window} nt",
-        f"L={result.rnaplfold_max_bp_span} nt",
-    ]
+    parts = []
     if annot is not None:
         parts.append(f"5'UTR={int(annot['l_utr5'])} nt")
         parts.append(f"CDS={int(annot['l_cds'])} nt")
-        parts.append(f"3'UTR={int(annot['l_utr3'])} nt")
     parts.append(f"TIS=−{int(tis_up)}/+{int(tis_down)} nt")
     return "  ·  ".join(parts)
 
@@ -124,7 +124,7 @@ def plot_one_gene(result: DeviationResult,
 
     fig = plt.figure(figsize=(13.5, 8.4))
     gs = fig.add_gridspec(4, 1, height_ratios=[3.0, 3.0, 2.8, 1.0],
-                          hspace=0.18)
+                          hspace=0.28)
     ax_a = fig.add_subplot(gs[0])
     ax_b = fig.add_subplot(gs[1], sharex=ax_a)
     ax_c = fig.add_subplot(gs[2], sharex=ax_a)
@@ -136,13 +136,13 @@ def plot_one_gene(result: DeviationResult,
 
     x = np.arange(1, n + 1)
 
-    # Panel A — RNAplfold P_paired
+    # Panel A — global MFE paired fraction (smoothed)
     ax_a.plot(x, result.p_model_smooth, color=rnap_color, lw=LINEWIDTH,
-              alpha=0.95, label="P(paired) model (smoothed)")
+              alpha=0.95, label="MFE paired fraction (smoothed)")
     ax_a.fill_between(x, 0, result.p_model_smooth, color=rnap_color, alpha=0.15)
     ax_a.set_ylim(-0.02, 1.02)
     ax_a.set_xlim(1, n)
-    ax_a.set_ylabel("Model\nP(paired)", fontsize=LABEL_FONTSIZE)
+    ax_a.set_ylabel("Global MFE\npaired fraction", fontsize=LABEL_FONTSIZE)
     ax_a.tick_params(labelbottom=False)
     ax_a.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.35)
     ax_a.set_axisbelow(True)
@@ -216,18 +216,11 @@ def plot_one_gene(result: DeviationResult,
         ax_c.add_patch(rect)
     ax_c.set_ylim(-mag * 1.05, mag * 1.05)
     win_tag = f" (per-{scan_w}nt window)" if scan_w else ""
-    ax_c.set_ylabel(f"Signed deviation{win_tag}\n(model − DMS)",
+    ax_c.set_ylabel(f"Signed deviation{win_tag}\n(MFE − DMS)",
                     fontsize=LABEL_FONTSIZE)
     ax_c.tick_params(labelbottom=False)
     ax_c.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.35)
     ax_c.set_axisbelow(True)
-    # Compact direction key on the right of panel C
-    ax_c.text(1.005, 0.95, "↑ model > DMS",
-              transform=ax_c.transAxes, fontsize=9, color=rnap_color,
-              ha="left", va="top")
-    ax_c.text(1.005, 0.05, "↓ DMS > model",
-              transform=ax_c.transAxes, fontsize=9, color=dms_color,
-              ha="left", va="bottom")
     style_axis(ax_c)
 
     # Panel D — gene architecture + region blocks colored by class
@@ -275,7 +268,7 @@ def plot_one_gene(result: DeviationResult,
 
     # Title + subtitle
     ax_a.set_title(
-        f"{species} {gene} — DMS / model structure-deviation regions",
+        f"{species} {gene} — DMS / global-MFE structure-deviation regions",
         fontsize=TITLE_FONTSIZE - 1, pad=18,
     )
     ax_a.text(
@@ -287,10 +280,17 @@ def plot_one_gene(result: DeviationResult,
         fontsize=LABEL_FONTSIZE - 2, color="#555555",
     )
 
-    # Single legend (bottom of the figure) with the classes that are
-    # actually called for this gene.
-    _draw_class_legend(ax_d, sorted(classes_present, key=lambda c: CLASS_ORDER.index(c)
-                                    if c in CLASS_ORDER else 999))
+    # Bottom legend: region classes + filled-direction key for panel C
+    from matplotlib.patches import Patch as _Patch
+    dir_handles = [
+        _Patch(facecolor=rnap_color, alpha=0.40, label="↑ MFE > DMS (more pairing)"),
+        _Patch(facecolor=dms_color, alpha=0.40, label="↓ DMS > MFE (more protected)"),
+    ]
+    dir_labels = ["↑ MFE > DMS (more pairing)", "↓ DMS > MFE (more protected)"]
+    _draw_class_legend(fig,
+                       sorted(classes_present,
+                              key=lambda c: CLASS_ORDER.index(c) if c in CLASS_ORDER else 999),
+                       extra_handles=dir_handles, extra_labels=dir_labels)
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
@@ -311,7 +311,7 @@ def plot_lollipop(regions_df: pd.DataFrame, out_path: Path,
     genes = sorted(sub["Gene"].unique().tolist())
     n_genes = len(genes)
     fig_h = max(2.5, 0.55 * n_genes + 1.4)
-    fig, ax = plt.subplots(figsize=(11, fig_h))
+    fig, ax = plt.subplots(figsize=(13, fig_h))
     gene_y = {g: i for i, g in enumerate(genes)}
 
     classes_present: set[str] = set()

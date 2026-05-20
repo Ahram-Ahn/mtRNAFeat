@@ -118,9 +118,9 @@ def write_run_manifest(
         "git_commit": _git_commit(repo_root),
         "python_version": sys.version.split()[0],
         "platform": sys.platform,
-        "timestamp_utc": _dt.datetime.now(_dt.UTC).isoformat(
+        "timestamp_utc": _dt.datetime.utcnow().isoformat(
             timespec="seconds"
-        ),
+        ) + "Z",
     }
     path = outdir / "run_manifest.json"
     with open(path, "w") as fh:

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -34,28 +35,19 @@ from mtrnafeat.viz.style import (
 )
 
 
-def _draw_architecture_strip(ax, l_utr5: int, l_cds: int, transcript_len: int,
-                              fontsize: int = 10) -> None:
-    """Compact architecture strip with consistent 5'UTR / CDS / 3'UTR labels.
-
-    Every region gets the same label treatment: a tinted rectangle, the
-    region name centered inside if there's room (>=8% of transcript
-    length), otherwise placed just above the strip with a thin leader
-    line into the band. Long-form 5'UTR/3'UTR are always rendered the
-    same way so the figure reads consistently across genes with very
-    different UTR lengths.
-    """
+def _draw_architecture_strip(ax, l_utr5: int, l_cds: int, transcript_len: int) -> None:
+    """Compact architecture strip: colored rectangles only; labels go in figure legend."""
     cds_start = l_utr5 + 1
     cds_end = l_utr5 + l_cds
     utr3_start = cds_end + 1
 
     regions = []
     if l_utr5 >= 1:
-        regions.append(("5'UTR", 1, l_utr5, PALETTE.get("UTR", "#dddddd"), False))
+        regions.append((1, l_utr5, PALETTE.get("UTR", "#dddddd")))
     if cds_end >= cds_start:
-        regions.append(("CDS", cds_start, cds_end, PALETTE.get("CDS", "#7faaff"), True))
+        regions.append((cds_start, cds_end, PALETTE.get("CDS", "#7faaff")))
     if transcript_len >= utr3_start:
-        regions.append(("3'UTR", utr3_start, transcript_len, PALETTE.get("UTR", "#dddddd"), False))
+        regions.append((utr3_start, transcript_len, PALETTE.get("UTR", "#dddddd")))
 
     ax.set_xlim(1, transcript_len)
     ax.set_ylim(0, 1)
@@ -64,27 +56,10 @@ def _draw_architecture_strip(ax, l_utr5: int, l_cds: int, transcript_len: int,
         ax.spines[spine].set_visible(False)
     ax.tick_params(axis="y", left=False, labelleft=False)
 
-    short_threshold = max(1, int(0.08 * transcript_len))
-
-    for name, lo, hi, color, is_cds in regions:
+    for lo, hi, color in regions:
         width = hi - lo + 1
         ax.add_patch(plt.Rectangle((lo, 0.18), width, 0.64, facecolor=color,
                                     edgecolor="#444444", linewidth=0.6, zorder=1))
-        center = (lo + hi) / 2.0
-        if width >= short_threshold:
-            ax.text(center, 0.5, name, ha="center", va="center",
-                     fontsize=fontsize,
-                     color="white" if is_cds else "#222222",
-                     fontweight="bold" if is_cds else "normal", zorder=3)
-        else:
-            ax.annotate(
-                name, xy=(center, 0.82), xytext=(0, 12),
-                xycoords="data", textcoords="offset points",
-                ha="center", va="bottom", fontsize=fontsize - 1,
-                fontweight="bold", color="#222222",
-                arrowprops=dict(arrowstyle="-", color="#444444",
-                                lw=0.6, shrinkA=0, shrinkB=2),
-            )
 
 
 def plot_gene(rec: DbRecord, species: str, out_path: Path,
@@ -144,7 +119,7 @@ def plot_gene(rec: DbRecord, species: str, out_path: Path,
     style_axis(ax_pairs)
 
     paired = np.array([1 if ch in "()" else 0 for ch in rec.structure])
-    win = max(20, n // 30)
+    win = 50
     if win >= n:
         win = max(2, n // 4)
     smooth = np.convolve(paired, np.ones(win) / win, mode="same")
@@ -152,8 +127,8 @@ def plot_gene(rec: DbRecord, species: str, out_path: Path,
     ax_track.fill_between(range(1, n + 1), smooth, 0, alpha=0.3, color="darkblue", zorder=2)
     ax_track.set_ylim(0, 1)
     ax_track.set_xlim(1, n)
-    ax_track.set_ylabel("Local paired fraction", fontsize=LABEL_FONTSIZE - 1)
-    ax_track.set_title(f"Local paired fraction (window = {win} nt)",
+    ax_track.set_ylabel("DMS-guided paired fraction", fontsize=LABEL_FONTSIZE - 1)
+    ax_track.set_title(f"DMS-guided paired fraction (window = {win} nt)",
                         fontsize=13, fontweight="bold", pad=8)
     style_axis(ax_track)
 
@@ -170,6 +145,13 @@ def plot_gene(rec: DbRecord, species: str, out_path: Path,
         except Exception:
             pass
         ax_arch.set_xlabel("Transcript position (nt)", fontsize=LABEL_FONTSIZE - 1)
+        utr_patch = mpatches.Patch(facecolor=PALETTE.get("UTR", "#dddddd"),
+                                    edgecolor="#444444", linewidth=0.6, label="5'/3' UTR")
+        cds_patch = mpatches.Patch(facecolor=PALETTE.get("CDS", "#7faaff"),
+                                    edgecolor="#444444", linewidth=0.6, label="CDS")
+        ax_track.legend(handles=[utr_patch, cds_patch], loc="upper right",
+                         fontsize=9, frameon=True, framealpha=0.85,
+                         edgecolor="#cccccc", title="Region", title_fontsize=8)
     else:
         ax_track.set_xlabel("Transcript position (nt)", fontsize=LABEL_FONTSIZE - 1)
 

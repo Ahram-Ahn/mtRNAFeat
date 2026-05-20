@@ -47,7 +47,8 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     if not win.empty:
         canonical_csv(win, out / "cofold_per_window_corr.csv")
 
-    cofold_plot.gap_strip_panels(full, out, cfg.plot_format, dpi=cfg.dpi)
+    cofold_plot.gap_closure_panels(full, out, cfg.plot_format, dpi=cfg.dpi)
+    cofold_plot.gap_heatmap_panels(full, out, cfg.plot_format, dpi=cfg.dpi)
     if not win.empty:
         cofold_plot.per_window_corr_curves(win, out, cfg.plot_format, dpi=cfg.dpi)
     return 0

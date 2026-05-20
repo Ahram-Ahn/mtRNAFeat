@@ -95,15 +95,11 @@ def _draw_architecture(ax_arch, species: str, gene: str, n: int,
 
 def _context_subtitle(annot: dict | None, window: int, span: int,
                       tis_upstream: int, tis_downstream: int) -> str:
-    parts = [f"W={window} nt", f"L={span} nt"]
+    parts = []
     if annot is not None:
-        l_utr5 = int(annot["l_utr5"])
-        l_cds = int(annot["l_cds"])
-        l_utr3 = int(annot["l_utr3"])
-        parts.append(f"5'UTR={l_utr5} nt")
-        parts.append(f"CDS={l_cds} nt")
-        parts.append(f"3'UTR={l_utr3} nt")
-    parts.append(f"TIS={int(tis_upstream)}/{int(tis_downstream)} nt")
+        parts.append(f"5'UTR={int(annot['l_utr5'])} nt")
+        parts.append(f"CDS={int(annot['l_cds'])} nt")
+    parts.append(f"TIS=−{int(tis_upstream)}/+{int(tis_downstream)} nt")
     return "  ·  ".join(parts)
 
 
@@ -165,7 +161,7 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
     if has_dms:
         fig = plt.figure(figsize=(13.5, 8.4))
         gs = fig.add_gridspec(4, 1, height_ratios=[3.0, 3.0, 2.2, 1.0],
-                              hspace=0.18)
+                              hspace=0.28)
         ax_p = fig.add_subplot(gs[0])
         ax_dms = fig.add_subplot(gs[1], sharex=ax_p)
         ax_delta = fig.add_subplot(gs[2], sharex=ax_p)
@@ -182,11 +178,10 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         ax_p.fill_between(x, 0, smooth, color=rnap_color, alpha=0.15)
         ax_p.set_ylim(-0.02, 1.02)
         ax_p.set_xlim(1, n)
-        ax_p.set_ylabel("P(paired)\n(RNAplfold)", fontsize=LABEL_FONTSIZE)
+        ax_p.set_ylabel("P(paired)", fontsize=LABEL_FONTSIZE)
         ax_p.tick_params(labelbottom=False)
         ax_p.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.35)
         ax_p.set_axisbelow(True)
-        legend_outside(ax_p, position="right", fontsize=10, frameon=False)
         style_axis(ax_p)
 
         # Track 2: DMS paired smoothed
@@ -196,11 +191,10 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
                     label=f"DMS paired fraction (smoothed, w={smooth_window} nt)")
         ax_dms.fill_between(x, 0, dms_smoothed, color=dms_color, alpha=0.15)
         ax_dms.set_ylim(-0.02, 1.02)
-        ax_dms.set_ylabel("DMS paired\nfraction", fontsize=LABEL_FONTSIZE)
+        ax_dms.set_ylabel("DMS paired", fontsize=LABEL_FONTSIZE)
         ax_dms.tick_params(labelbottom=False)
         ax_dms.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.35)
         ax_dms.set_axisbelow(True)
-        legend_outside(ax_dms, position="right", fontsize=10, frameon=False)
         style_axis(ax_dms)
 
         # Track 3: per-window Δ
@@ -248,7 +242,6 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         ax_delta.tick_params(labelbottom=False)
         ax_delta.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.35)
         ax_delta.set_axisbelow(True)
-        legend_outside(ax_delta, position="right", fontsize=9, frameon=False)
         style_axis(ax_delta)
 
         # Track 4: architecture bar
@@ -281,6 +274,17 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             transform=ax_p.transAxes, ha="center", va="bottom",
             fontsize=LABEL_FONTSIZE - 2, color="#555555",
         )
+
+        # Consolidated legend below the figure
+        all_handles, all_labels = [], []
+        for axx in (ax_p, ax_dms, ax_delta):
+            h, l = axx.get_legend_handles_labels()
+            all_handles.extend(h)
+            all_labels.extend(l)
+        if all_handles:
+            fig.legend(all_handles, all_labels, loc="lower center",
+                       bbox_to_anchor=(0.5, -0.06), ncol=3,
+                       frameon=True, framealpha=0.9, fontsize=9)
     else:
         # Legacy 2-panel fallback (no DMS overlay available)
         fig = plt.figure(figsize=(13.5, 5.5))
@@ -295,7 +299,7 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         ax.fill_between(x, 0, smooth, color=rnap_color, alpha=0.15)
         ax.set_ylim(-0.02, 1.02)
         ax.set_xlim(1, n)
-        ax.set_ylabel("P(paired)\n(RNAplfold)", fontsize=LABEL_FONTSIZE)
+        ax.set_ylabel("P(paired)", fontsize=LABEL_FONTSIZE)
         ax.tick_params(labelbottom=False)
         ax.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.35)
         ax.set_axisbelow(True)
@@ -310,7 +314,7 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             transform=ax.transAxes, ha="center", va="bottom",
             fontsize=LABEL_FONTSIZE - 2, color="#555555",
         )
-        legend_outside(ax, position="right", fontsize=10, frameon=False)
+        ax.legend(loc="upper right", fontsize=9, frameon=True, framealpha=0.9)
         style_axis(ax)
 
         _draw_architecture(ax_arch, species, gene, n, annot,

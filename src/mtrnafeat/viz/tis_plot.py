@@ -67,7 +67,7 @@ def _draw_one(ax, sub: pd.DataFrame, species: str) -> None:
         return
     sub = sub.copy().reset_index(drop=True)
     ind = np.arange(len(sub))
-    width = 0.4
+    width = 0.38
     full_ctx = (sub["Has_Full_5UTR_Context"].astype(bool).values
                  if "Has_Full_5UTR_Context" in sub.columns
                  else np.ones(len(sub), dtype=bool))
@@ -81,28 +81,14 @@ def _draw_one(ax, sub: pd.DataFrame, species: str) -> None:
         width, _MFE_COLOR, "Vienna prediction", full_ctx,
     )
 
-    # Single-line, horizontal x-tick labels: gene name + a "*" flag for
-    # genes whose 5'UTR is shorter than the requested window.
+    # Gene name tick labels; * flags truncated 5'UTR context
     gene_labels = [f"{g}*" if not full else str(g)
                    for g, full in zip(sub["Gene"], full_ctx)]
     ax.set_xticks(list(ind))
-    ax.set_xticklabels(gene_labels, rotation=0, fontsize=10, fontweight="bold")
-
-    # 5'UTR length shown as a quiet italic annotation below the bar
-    # group instead of inflating the tick label.
-    if "L_5UTR_in_window" in sub.columns:
-        ymin = ax.get_ylim()[0]
-        for x, u in zip(ind, sub["L_5UTR_in_window"].astype(int)):
-            ax.annotate(
-                f"5'UTR={u}",
-                xy=(x, 0), xycoords=("data", "data"),
-                xytext=(0, -18), textcoords="offset points",
-                ha="center", va="top", fontsize=8,
-                color="#666666", style="italic",
-                annotation_clip=False,
-            )
-        # Reserve room below x=0 so the annotation isn't clipped.
-        del ymin
+    ax.set_xticklabels(gene_labels, rotation=0, fontsize=9, fontweight="bold")
+    ax.set_xlim(-0.5, len(sub) - 0.5)
+    ax.set_xlabel("Gene  (* = 5'UTR shorter than upstream window)",
+                  fontsize=LABEL_FONTSIZE)
 
     ax.axhline(0, color="black", lw=0.8, zorder=2)
     ax.set_title(species, fontsize=TITLE_FONTSIZE - 1, pad=8, fontweight="bold")
@@ -130,7 +116,7 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     if not species_present:
         species_present = sorted(df["Species"].unique())
     n = len(species_present)
-    fig, axes = plt.subplots(1, n, figsize=(7.4 * n, 5.8), sharey=True)
+    fig, axes = plt.subplots(1, n, figsize=(7.4 * n, 6.4), sharey=True)
     if n == 1:
         axes = [axes]
     for ax, sp in zip(axes, species_present):
@@ -145,18 +131,18 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
                        label="Vienna prediction"),
         plt.Rectangle((0, 0), 1, 1, facecolor="white", edgecolor="#333333",
                        linewidth=0.7, hatch="///",
-                       label="* 5'UTR truncated"),
+                       label="* 5'UTR shorter than window"),
         plt.Line2D([0], [0], marker="D", color="none",
                     markerfacecolor="white",
                     markeredgecolor=_ZERO_MARKER_COLOR,
                     markersize=7, markeredgewidth=1.2,
                     label="ΔG = 0 (no pairs)"),
     ]
-    fig.legend(handles=handles, loc="lower center", ncol=4,
-                bbox_to_anchor=(0.5, -0.04), frameon=False, fontsize=10)
+    fig.legend(handles=handles, loc="upper right", ncol=1,
+                frameon=True, framealpha=0.9, fontsize=10)
     fig.suptitle("TIS zoom — DMS vs Vienna ΔG around the start codon (−50 / +50 nt)",
                   fontsize=TITLE_FONTSIZE - 1, y=1.02, fontweight="bold")
-    fig.tight_layout(rect=(0, 0.06, 1, 0.97))
+    fig.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return Path(out_path)

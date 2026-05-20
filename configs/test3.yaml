@@ -1,0 +1,56 @@
+# Scale-up test config — higher sim counts for more accurate null distributions.
+#
+# 2× more sequences per species cloud (sim_num_sequences: 1500 → 3000)
+# 2.5× denser GC gradient (gradient_seqs_per_step: 200 → 500)
+# 2.5× more shuffles for significance (n_shuffles: 200 → 500)
+# 2.5× more substitution simulations (substitution_n_simulations: 200 → 500)
+#
+# Run with:
+#   mtrnafeat run-all --parallel --config configs/test3.yaml --outdir runs/test3
+seed: 42
+data_dir: data
+outdir: runs/test3
+
+target_genes:
+  # Shared by both species
+  - COX1
+  - COX2
+  - COX3
+  - ATP86          # ATP8/ATP6 joined transcript
+  # Human-only
+  - CYTB
+  - ND1
+  - ND2
+  - ND3
+  - ND4L4          # ND4L/ND4 joined transcript
+  - ND5
+  - ND6
+  # Yeast-only
+  - ATP9
+  - COB
+  - VAR1
+
+n_workers: 4
+
+sim_seq_length: 150
+sim_num_sequences: 3000
+gradient_steps: 21
+gradient_seqs_per_step: 500
+n_shuffles: 500
+
+window_nt: 50
+step_nt: 10
+max_bp_span: 300
+
+cofold_alpha: 0.5
+cofold_tau: 640.0
+fold_engine: rnastructure
+
+substitution_n_simulations: 500
+substitution_max_nt: 300
+
+max_loop_artifact_size: 50
+max_heatmap_size: 15
+
+dpi: 300
+plot_format: svg

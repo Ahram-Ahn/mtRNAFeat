@@ -28,4 +28,33 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
                                   y_col="Paired_AU_Pct", ylabel="Paired A-U (%)", include_yx_line=False, dpi=cfg.dpi)
     landscape_plot.pairing_bias(grad_df, exp_df, plot_path(out, "pairing_bias_GU", cfg.plot_format),
                                   y_col="Paired_GU_Pct", ylabel="Paired G-U wobble (%)", include_yx_line=False, dpi=cfg.dpi)
+
+    # Per-species separate overlay files (species-filtered simulation cloud only)
+    for species in ["Human", "Yeast"]:
+        landscape_plot.landscape_overlay_one(
+            sim_df, exp_df,
+            plot_path(out, f"landscape_overlay_{species.lower()}", cfg.plot_format),
+            species=species, dpi=cfg.dpi,
+        )
+
+    # Nucleotide-corrected pairing bias: each species' empirical null as reference
+    bias_specs = [
+        ("Paired_GC_Pct", "Paired G-C (%)", "GC"),
+        ("Paired_AU_Pct", "Paired A-U (%)", "AU"),
+        ("Paired_GU_Pct", "Paired G-U wobble (%)", "GU"),
+    ]
+    for species in ["Human", "Yeast"]:
+        sp_sim = sim_df[sim_df["Species"] == species]
+        for y_col, ylabel, suffix in bias_specs:
+            landscape_plot.pairing_bias_species_corrected(
+                sp_sim, exp_df,
+                plot_path(out, f"pairing_bias_{suffix}_{species.lower()}_corrected", cfg.plot_format),
+                y_col=y_col, ylabel=ylabel, species=species, dpi=cfg.dpi,
+            )
+            landscape_plot.pairing_bias_species_corrected(
+                sp_sim, exp_df,
+                plot_path(out, f"pairing_bias_{suffix}_{species.lower()}_ND6", cfg.plot_format),
+                y_col=y_col, ylabel=ylabel, species=species, dpi=cfg.dpi,
+                gene_filter="ND6",
+            )
     return 0

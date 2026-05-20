@@ -132,12 +132,12 @@ def _make_result(p_model, p_dms, *, sequence=None, structure=None,
     pds = pd.Series(p_dms).rolling(smooth, center=True, min_periods=1).mean().to_numpy()
     return DeviationResult(
         species=species, gene=gene, sequence=sequence, dms_structure=structure,
+        mfe_structure="." * n, mfe_kcal=0.0,
         p_model_raw=p_model, p_model_smooth=pms,
         p_dms_raw=p_dms, p_dms_smooth=pds,
         deviation_raw=p_model - p_dms,
         deviation_smooth=pms - pds,
         rolling_window=smooth,
-        rnaplfold_window=80, rnaplfold_max_bp_span=50, rnaplfold_cutoff=0.001,
     )
 
 
