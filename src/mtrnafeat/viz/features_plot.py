@@ -122,9 +122,10 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     for ax, sp in zip(axes, species_list):
         sim_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "Sim")]
         exp_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "DMS")]
-        # Per-species sim-cloud cmap: keep them distinct yet both
-        # colorblind-safe (viridis sequential vs cividis sequential).
-        cmap = "viridis" if sp == "Human" else "cividis"
+        # Per-species sim-cloud cmap — muted sequential palettes that don't
+        # overwhelm the experimental scatter on top. (The earlier viridis /
+        # cividis fills were too saturated.)
+        cmap = "Reds" if sp == "Human" else "Oranges"
         sim_drawn = False
         if not sim_sub.empty:
             try:

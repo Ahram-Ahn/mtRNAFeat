@@ -121,35 +121,68 @@ def gradient_curves(gradient_df, out_path: Path, dpi: int = 300) -> Path:
     return Path(out_path)
 
 
+_SPECIES_REFERENCE_CONTOURS = {
+    "Human": ("Sim Human (46% GC)",),
+    "Yeast": ("Sim Yeast 5' UTR (7% GC)", "Sim Yeast CDS (30% GC)"),
+}
+
+
 def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
                            dpi: int = 300) -> Path:
-    """Single-panel figure for one species: simulation KDE cloud + experimental scatter.
+    """Single-panel figure for one species: empirical sim cloud + GC-reference
+    contours + experimental scatter.
 
-    Filters `sim_df` to rows where Species == species (empirical conditions only,
-    not symmetric-GC legacy clouds).  Legend is placed inside the axes.
+    The empirical (species-specific A/U/G/C) cloud sets the primary contour;
+    additional GC-only reference contours are overlaid so the reader can see
+    how the empirical cloud compares against well-defined GC isolines (e.g.
+    7% GC for yeast 5'UTR, 30% GC for yeast CDS, 46% GC for human).
     """
     apply_theme()
     species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
 
     sim_sub = sim_df[sim_df["Species"] == species]
     sim_conditions = list(sim_sub["Condition"].unique())
-    contour_palette = sns.color_palette("viridis", max(len(sim_conditions), 3))
+
+    # Reference contours from the symmetric-GC clouds (Species == "n/a")
+    refs = _SPECIES_REFERENCE_CONTOURS.get(species, ())
+    ref_sub = sim_df[sim_df["Condition"].isin(refs)] if refs else sim_df.iloc[0:0]
+
+    # Muted sequential palette for empirical cloud; distinct accent colors
+    # per GC reference so they don't blur into a single mass.
+    empirical_color = "#7E7E7E"  # neutral grey for the per-species empirical cloud
+    ref_colors = ["#1f77b4", "#2ca02c", "#9467bd"]  # blue / green / purple
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
     legend_handles: list = []
     legend_labels: list[str] = []
 
-    for i, cond in enumerate(sim_conditions):
+    for cond in sim_conditions:
         sub = sim_sub[sim_sub["Condition"] == cond]
         try:
             sns.kdeplot(data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
-                        ax=ax, fill=True, alpha=0.30, color=contour_palette[i],
-                        levels=4, thresh=0.10, warn_singular=False)
+                        ax=ax, fill=True, alpha=0.28, color=empirical_color,
+                        levels=5, thresh=0.10, warn_singular=False)
         except Exception:
             sns.scatterplot(data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
-                            ax=ax, color=contour_palette[i], alpha=0.30, s=12)
-        legend_handles.append(Patch(facecolor=contour_palette[i], alpha=0.40))
+                            ax=ax, color=empirical_color, alpha=0.28, s=12)
+        legend_handles.append(Patch(facecolor=empirical_color, alpha=0.40))
+        legend_labels.append(cond)
+
+    for i, cond in enumerate(refs):
+        sub = ref_sub[ref_sub["Condition"] == cond]
+        if sub.empty:
+            continue
+        color = ref_colors[i % len(ref_colors)]
+        try:
+            sns.kdeplot(data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                        ax=ax, fill=False, alpha=0.85, color=color,
+                        levels=4, thresh=0.10, linewidths=1.8,
+                        warn_singular=False)
+        except Exception:
+            sns.scatterplot(data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                            ax=ax, color=color, alpha=0.40, s=10)
+        legend_handles.append(Line2D([0], [0], color=color, linewidth=2.0))
         legend_labels.append(cond)
 
     exp_sub = exp_df[exp_df["Species"] == species]
@@ -184,62 +217,80 @@ def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
     return Path(out_path)
 
 
-def pairing_bias_species_corrected(species_sim_df, exp_df, out_path: Path,
-                                    y_col: str, ylabel: str, species: str,
-                                    dpi: int = 300, gene_filter: str | None = None) -> Path:
-    """Violin of the species-specific simulation null + experimental gene scatter.
+_BASE_BIAS_COLORS = {
+    "A": "#2ca02c",
+    "C": "#1f77b4",
+    "G": "#9467bd",
+    "U": "#d62728",
+}
+_BASE_LABEL = {"A": "A", "C": "C", "G": "G", "U": "U / T"}
 
-    Uses the empirical per-species nucleotide composition as the reference
-    null (passed in as `species_sim_df`), replacing the generic GC-gradient
-    baseline.  Experimental genes are shown as a scatter column next to the
-    violin.  If `gene_filter` is provided, only that gene's experimental point
-    is shown (useful for an ND6-only spotlight panel).
+
+def per_base_composition_bias(biased_gradient_df, exp_df, out_path: Path,
+                               species: str, dpi: int = 300) -> Path:
+    """Per-nucleotide composition vs sequence GC%, in pairing_bias style.
+
+    Four small panels (A / C / G / U). Each panel:
+      * grey line: the species-biased simulation gradient — preserves the
+        empirical C:G and A:U ratios as GC% sweeps, so within a given GC
+        ratio the per-species nucleotide imbalance is built in.
+      * scatter: each experimental gene as a labelled point.
+
+    This replaces the previous violin (which collapsed the gradient into
+    a single column and threw away the GC-axis signal).
     """
     apply_theme()
     species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
-    color = species_palette.get(species, "#333333")
+    exp_color = species_palette.get(species, "#333333")
 
-    exp_sub = exp_df[exp_df["Species"] == species].copy()
-    if gene_filter is not None:
-        exp_sub = exp_sub[exp_sub["Gene"] == gene_filter]
+    bg = biased_gradient_df[biased_gradient_df.get("Species", "") == species]
+    exp_sub = exp_df[exp_df["Species"] == species]
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True)
+    axes = axes.flatten()
 
-    sim_vals = species_sim_df[y_col].dropna().values
-    if len(sim_vals) > 1:
-        parts = ax.violinplot([sim_vals], positions=[0], widths=0.55,
-                               showmedians=True, showextrema=True)
-        for pc in parts["bodies"]:
-            pc.set_facecolor("#7fc7f5")
-            pc.set_alpha(0.70)
-        parts["cmedians"].set_color("#1565C0")
-        parts["cbars"].set_color("#555555")
-        parts["cmaxes"].set_color("#555555")
-        parts["cmins"].set_color("#555555")
+    for ax, base in zip(axes, ["A", "C", "G", "U"]):
+        y_col = f"Pct_{base}"
+        line_color = _BASE_BIAS_COLORS[base]
 
-    if not exp_sub.empty:
-        y_vals = exp_sub[y_col].values
-        jitter = 0.04
-        rng = __import__("numpy").random.default_rng(0)
-        x_jit = rng.uniform(-jitter, jitter, size=len(y_vals)) + 1
-        ax.scatter(x_jit, y_vals, color=color, s=100,
-                   edgecolor="black", linewidth=1.2, zorder=5)
-        for xi, yi, lbl in zip(x_jit, y_vals, exp_sub["Gene"].values):
-            ax.text(xi + 0.06, yi, lbl, fontsize=9, va="center", color="#222222")
+        if not bg.empty and y_col in bg.columns:
+            sns.lineplot(
+                data=bg, x="Sequence_GC_Pct", y=y_col, ax=ax,
+                color=line_color, errorbar="sd", linewidth=LINEWIDTH,
+                label=f"Biased baseline (preserves {species} C:G & A:U)",
+            )
 
-    ax.set_xticks([0, 1])
-    ax.set_xticklabels(["Simulation\n(empirical null)", "Observed\ngenes"],
-                        fontsize=LABEL_FONTSIZE - 1)
-    ax.set_ylabel(ylabel, fontsize=LABEL_FONTSIZE)
-    ax.set_xlim(-0.6, 1.9)
-    title = f"{species} — {ylabel}\nvs. nucleotide-corrected null"
-    if gene_filter is not None:
-        title += f"\n({gene_filter} only)"
-    ax.set_title(title, fontsize=TITLE_FONTSIZE - 2, pad=8)
-    style_axis(ax)
-    ax.grid(True, axis="y", linestyle=":", linewidth=0.5, alpha=0.45)
-    ax.set_axisbelow(True)
+        if not exp_sub.empty and y_col in exp_sub.columns:
+            sns.scatterplot(
+                data=exp_sub, x="Sequence_GC_Pct", y=y_col, ax=ax,
+                color=exp_color, s=110, edgecolor="black", linewidth=1.2,
+                zorder=5,
+            )
+            repel_labels(
+                ax,
+                xs=exp_sub["Sequence_GC_Pct"].values,
+                ys=exp_sub[y_col].values,
+                labels=exp_sub["Gene"].values,
+                color=exp_color, fontsize=9,
+            )
 
+        ax.set_title(f"{_BASE_LABEL[base]} composition",
+                      fontsize=TITLE_FONTSIZE - 1, fontweight="bold", pad=6)
+        ax.set_xlabel("Linear sequence GC content (%)", fontsize=LABEL_FONTSIZE)
+        ax.set_ylabel(f"{_BASE_LABEL[base]} content (%)", fontsize=LABEL_FONTSIZE)
+        ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.45)
+        ax.set_axisbelow(True)
+        ax.margins(x=0.04, y=0.10)
+        style_axis(ax)
+        leg = ax.get_legend()
+        if leg is not None:
+            leg.remove()
+
+    fig.suptitle(
+        f"{species} — individual nucleotide composition vs sequence GC%\n"
+        f"baseline preserves species-specific C/(G+C) and A/(A+U) bias",
+        fontsize=TITLE_FONTSIZE, fontweight="bold", y=1.02,
+    )
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)

@@ -3,7 +3,8 @@
 For each (species, gene), folds the wild-type CDS at every (alpha, tau)
 combo on the configured grid (cfg.cofold_alpha_sweep × cfg.cofold_tau_sweep)
 and reports how close each combo gets to the DMS-evaluated ΔG. Also runs
-a per-window CoFold-vs-DMS correlation analysis.
+a per-window CoFold-vs-DMS correlation analysis (CSV only — no figure;
+per-gene parameter-landscape heatmaps subsume the previous RMSE curves).
 
 Args (after `--`):
     --no-window-corr     skip the per-window correlation pass (faster).
@@ -49,6 +50,5 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
 
     cofold_plot.gap_closure_panels(full, out, cfg.plot_format, dpi=cfg.dpi)
     cofold_plot.gap_heatmap_panels(full, out, cfg.plot_format, dpi=cfg.dpi)
-    if not win.empty:
-        cofold_plot.per_window_corr_curves(win, out, cfg.plot_format, dpi=cfg.dpi)
+    cofold_plot.per_gene_landscape(full, out, cfg.plot_format, dpi=cfg.dpi)
     return 0

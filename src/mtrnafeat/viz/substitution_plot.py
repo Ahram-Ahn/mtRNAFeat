@@ -28,9 +28,7 @@ from mtrnafeat.viz.style import (
 )
 
 _POOL_COLORS = {
-    "flat_gc": "#FF7F0E",
     "flat_acgu": "#D62728",
-    "positional_gc": "#1F77B4",
     "positional_acgu": "#9467BD",
     "synonymous": "#2CA02C",
 }
@@ -127,7 +125,7 @@ def _zheat_for_species(sub_summary: pd.DataFrame, species: str,
     pivot = sub_summary.pivot_table(
         index="Gene", columns="Pool", values="Z_WT_MFE_vs_Pool"
     )
-    pool_order = ["flat_gc", "flat_acgu", "positional_gc", "positional_acgu", "synonymous"]
+    pool_order = ["flat_acgu", "positional_acgu", "synonymous"]
     pivot = pivot.reindex(columns=pool_order)
     # Wider figure to fit the title comfortably; minimum height keeps the
     # heatmap readable even for one-gene smoke runs.

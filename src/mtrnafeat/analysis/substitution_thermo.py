@@ -37,24 +37,17 @@ fully reproducible from the dot-bracket structure plus Vienna.
 
 The summary table reports Z-scores and empirical p-values for both refs.
 
-Five nulls:
-  * **flat_gc**     — random sequence at the gene's overall GC content;
-                       AT and GC drawn IID. Tests "is structure driven by GC?"
+Three nulls (the GC-only ``flat_gc`` and ``positional_gc`` pools were
+dropped because the ACGU variants strictly generalize them):
   * **flat_acgu**   — random sequence preserving the gene's full A/C/G/U
-                       frequency vector independently. Strictly more
-                       constrained than ``flat_gc``: useful when G and C
-                       (or A and U) frequencies are very asymmetric.
-                       Mitochondrial mRNAs commonly have G≫C on the
-                       L-strand (e.g. human ND6: G=191 vs C=37), and an
-                       overall-GC null hides that asymmetry entirely.
-  * **positional_gc** — random sequence preserving codon-position GC content
-                       (1st, 2nd, wobble each fixed). Tests "is structure driven
-                       by codon-bias of the genome?"
+                       frequency vector independently. Mitochondrial mRNAs
+                       commonly have G≫C on the L-strand (e.g. human ND6:
+                       G=191 vs C=37); a symmetric overall-GC null hides
+                       that asymmetry entirely.
   * **positional_acgu** — random sequence preserving codon-position
                        A/C/G/U frequencies independently (twelve
                        parameters: 4 nucleotides × 3 codon positions).
-                       Strictly more constrained than ``positional_gc``;
-                       the right comparator for transcripts where G/C
+                       The right comparator for transcripts where G/C
                        and A/U asymmetries differ across codon positions.
   * **synonymous**   — codon-by-codon synonymous resampling, weighted by
                        observed codon usage AND positional GC. Tests
@@ -65,6 +58,10 @@ publishable in a single panel and compatible with mt-mRNA gene lengths).
 The 500-nt chunks the user mentioned proved too aggressive for several
 short genes (ATP8, ND4L); 300 nt with codon-complete truncation is the
 sweet spot. Adjustable via cfg.substitution_max_nt.
+
+Input is CDS-only — sliced via ``io.annotations`` so UTR nucleotides
+never enter the codon-aware shuffling (UTRs have no codon table and
+would corrupt every codon-aware null).
 """
 from __future__ import annotations
 
@@ -80,6 +77,7 @@ from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
 from mtrnafeat.core.projection import truncate_prefix
+from mtrnafeat.io.annotations import annotation_for
 from mtrnafeat.io.codons import codon_table_for
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
@@ -313,13 +311,11 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
         except Exception:
             wt_dms_fulllen = float("nan")
 
-    # Pool order matters for RNG state determinism: existing pools
-    # (flat_gc, positional_gc, synonymous) draw first so historical
-    # outputs are bit-stable. The new ACGU-aware pools draw afterward.
+    # GC-only pools (flat_gc, positional_gc) were dropped at user request —
+    # the ACGU-aware versions strictly generalize them (they reduce to the
+    # GC variants when G=C and A=U) and the symmetric-GC nulls hide the
+    # H-strand C/G and A/U asymmetries we care about.
     pools = {
-        "flat_gc": [_flat_gc(length, overall_gc, rng) for _ in range(job.n_simulations)],
-        "positional_gc": [_positional_gc_sample(n_codons, pos_gc, rng)
-                          for _ in range(job.n_simulations)],
         "synonymous": [_synonymous_sample(seq_dna, table, pos_gc, usage_prior, rng)
                        for _ in range(job.n_simulations)],
         "flat_acgu": [_flat_acgu(length, overall_acgu, rng)
@@ -378,7 +374,7 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
         wt_mfe = float(wt_mfe_row.iloc[0])
         wt_dms = float(wt_dms_row.iloc[0]) if not wt_dms_row.empty else float("nan")
         wt_dms_full = float(wt_dms_full_row.iloc[0]) if not wt_dms_full_row.empty else float("nan")
-        for pool in ("flat_gc", "flat_acgu", "positional_gc", "positional_acgu", "synonymous"):
+        for pool in ("flat_acgu", "positional_acgu", "synonymous"):
             pool_vals = g[g["Pool"] == pool]["MFE_kcal_per_mol"].values.astype(float)
             if len(pool_vals) == 0:
                 continue
@@ -427,14 +423,29 @@ def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
             if target not in rec_by_gene:
                 continue
             rec = rec_by_gene[target]
-            seq = _truncate_codon_aligned(rec.sequence, max_nt=cfg.substitution_max_nt)
+
+            # Synonymous-codon shuffling requires CDS-only input — UTR
+            # nucleotides have no codon table and would corrupt every
+            # codon-aware null. Slice using the species annotation; fall
+            # back to the full record only when we have no annotation.
+            try:
+                annot = annotation_for(species, target)
+                l_utr5 = int(annot["l_utr5"])
+                l_cds = int(annot["l_cds"])
+                cds_seq = rec.sequence[l_utr5:l_utr5 + l_cds]
+                cds_struct = (rec.structure or "")[l_utr5:l_utr5 + l_cds]
+            except KeyError:
+                cds_seq = rec.sequence
+                cds_struct = rec.structure or ""
+
+            seq = _truncate_codon_aligned(cds_seq, max_nt=cfg.substitution_max_nt)
             if len(seq) < 60:
                 continue
-            full_seq = _dna(rec.sequence)
-            full_struct = rec.structure or ""
+            full_seq = _dna(cds_seq)
+            full_struct = cds_struct
             jobs.append(_PrefixJob(
                 species=species, gene=target, seq_dna=seq,
-                dms_structure=rec.structure or "",
+                dms_structure=cds_struct,
                 full_seq_dna=full_seq,
                 full_dms_structure=full_struct,
                 n_simulations=int(cfg.substitution_n_simulations),

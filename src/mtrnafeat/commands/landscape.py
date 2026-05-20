@@ -14,10 +14,12 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
 
     sim_df = landscape.simulate_specific_conditions(cfg)
     grad_df = landscape.simulate_gradient(cfg)
+    biased_df = landscape.simulate_biased_gradient(cfg)
     exp_df = landscape.experimental_overlay(cfg)
 
     canonical_csv(sim_df, out / "specific_conditions.csv")
     canonical_csv(grad_df, out / "gc_gradient.csv")
+    canonical_csv(biased_df, out / "gc_gradient_biased.csv")
     canonical_csv(exp_df, out / "experimental_overlay.csv")
 
     landscape_plot.landscape_overlay(sim_df, exp_df, plot_path(out, "landscape_overlay", cfg.plot_format), dpi=cfg.dpi)
@@ -29,7 +31,8 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     landscape_plot.pairing_bias(grad_df, exp_df, plot_path(out, "pairing_bias_GU", cfg.plot_format),
                                   y_col="Paired_GU_Pct", ylabel="Paired G-U wobble (%)", include_yx_line=False, dpi=cfg.dpi)
 
-    # Per-species separate overlay files (species-filtered simulation cloud only)
+    # Per-species separate overlay files (species-filtered simulation cloud
+    # plus GC reference contours overlaid).
     for species in ["Human", "Yeast"]:
         landscape_plot.landscape_overlay_one(
             sim_df, exp_df,
@@ -37,24 +40,11 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             species=species, dpi=cfg.dpi,
         )
 
-    # Nucleotide-corrected pairing bias: each species' empirical null as reference
-    bias_specs = [
-        ("Paired_GC_Pct", "Paired G-C (%)", "GC"),
-        ("Paired_AU_Pct", "Paired A-U (%)", "AU"),
-        ("Paired_GU_Pct", "Paired G-U wobble (%)", "GU"),
-    ]
+    # Per-nucleotide composition bias plot (replaces the previous violin).
     for species in ["Human", "Yeast"]:
-        sp_sim = sim_df[sim_df["Species"] == species]
-        for y_col, ylabel, suffix in bias_specs:
-            landscape_plot.pairing_bias_species_corrected(
-                sp_sim, exp_df,
-                plot_path(out, f"pairing_bias_{suffix}_{species.lower()}_corrected", cfg.plot_format),
-                y_col=y_col, ylabel=ylabel, species=species, dpi=cfg.dpi,
-            )
-            landscape_plot.pairing_bias_species_corrected(
-                sp_sim, exp_df,
-                plot_path(out, f"pairing_bias_{suffix}_{species.lower()}_ND6", cfg.plot_format),
-                y_col=y_col, ylabel=ylabel, species=species, dpi=cfg.dpi,
-                gene_filter="ND6",
-            )
+        landscape_plot.per_base_composition_bias(
+            biased_df, exp_df,
+            plot_path(out, f"nucleotide_bias_{species.lower()}", cfg.plot_format),
+            species=species, dpi=cfg.dpi,
+        )
     return 0

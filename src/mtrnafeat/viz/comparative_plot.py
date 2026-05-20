@@ -66,11 +66,12 @@ def plot_directional_flux(flux_df, out_path: Path, dpi: int = 300) -> Path:
 
 
 def plot_substitution_summary(sub_summary, out_path: Path, dpi: int = 300) -> Path:
-    """Grouped bar chart: substitution direction × count, colored by synonymous/non-synonymous.
+    """12-state substitution spectrum (Yeast → Human COX1) as 2×3 heatmaps.
 
-    Replaces the two-panel heatmap approach with a single figure that directly
-    compares synonymous vs non-synonymous counts per substitution direction.
-    Counts are pooled across codon positions (1–3) and sorted by total count.
+    Rows = Identical AA / Divergent AA. Columns = codon position 1 / 2 / 3.
+    Each tile is a 4×4 (Yeast base × Human base) heatmap. Diagonal cells
+    are unchanged nucleotides and labelled "Same" — excluded from the
+    12-state count. Off-diagonal cells show count + percent-within-tile.
     """
     apply_theme()
     if sub_summary.empty:
@@ -81,54 +82,123 @@ def plot_substitution_summary(sub_summary, out_path: Path, dpi: int = 300) -> Pa
         plt.close(fig)
         return Path(out_path)
 
+    bases = ["A", "C", "G", "T"]
     df = sub_summary.copy()
-    df["Direction"] = df["Yeast_Base"] + "→" + df["Human_Base"]
-    df["Type"] = df["Same_AA"].map({True: "Synonymous", False: "Non-synonymous"})
+    # Normalize U to T
+    df["Yeast_Base"] = df["Yeast_Base"].replace({"U": "T"})
+    df["Human_Base"] = df["Human_Base"].replace({"U": "T"})
 
-    # Pool counts across codon positions; sort directions by total descending
-    agg = df.groupby(["Direction", "Type"])["Count"].sum().reset_index()
-    total_order = agg.groupby("Direction")["Count"].sum().sort_values(ascending=False).index
-    directions = list(total_order)
+    df["AA_Cat"] = df["Same_AA"].map({True: "Identical AA", False: "Divergent AA"})
+    aa_order = ["Identical AA", "Divergent AA"]
+    positions = [1, 2, 3]
 
-    syn_map = (agg[agg["Type"] == "Synonymous"]
-               .set_index("Direction")["Count"]
-               .reindex(directions, fill_value=0))
-    nonsyn_map = (agg[agg["Type"] == "Non-synonymous"]
-                  .set_index("Direction")["Count"]
-                  .reindex(directions, fill_value=0))
+    # Build the per-tile percentage normalization across off-diagonal cells.
+    tile_totals: dict[tuple[str, int], float] = {}
+    for cat in aa_order:
+        for pos in positions:
+            sub = df[(df["AA_Cat"] == cat) & (df["Position"] == pos)]
+            off = sub[sub["Yeast_Base"] != sub["Human_Base"]]
+            tile_totals[(cat, pos)] = float(off["Count"].sum())
 
-    x = np.arange(len(directions))
-    width = 0.38
+    # Vmax for the colorbar uses the maximum off-diagonal percentage.
+    all_pcts: list[float] = []
+    for cat in aa_order:
+        for pos in positions:
+            sub = df[(df["AA_Cat"] == cat) & (df["Position"] == pos)]
+            tot = tile_totals[(cat, pos)] or 1.0
+            for _, r in sub.iterrows():
+                if r["Yeast_Base"] != r["Human_Base"]:
+                    all_pcts.append(100.0 * float(r["Count"]) / tot)
+    vmax = max(all_pcts) if all_pcts else 1.0
+    if vmax <= 0:
+        vmax = 1.0
 
-    fig, ax = plt.subplots(figsize=(11, 5))
+    import matplotlib as mpl
+    cmap = plt.get_cmap("viridis")
+    norm = mpl.colors.Normalize(vmin=0.0, vmax=vmax)
 
-    bars_syn = ax.bar(x - width / 2, syn_map.values, width,
-                      label="Synonymous", color="#2166AC", alpha=0.85)
-    bars_non = ax.bar(x + width / 2, nonsyn_map.values, width,
-                      label="Non-synonymous", color="#D6604D", alpha=0.85)
+    fig, axes = plt.subplots(
+        2, 3, figsize=(15, 9.5),
+        gridspec_kw={"hspace": 0.32, "wspace": 0.18},
+    )
 
-    # Value labels above each bar
-    for bar in list(bars_syn) + list(bars_non):
-        h = bar.get_height()
-        if h > 0:
-            ax.text(bar.get_x() + bar.get_width() / 2, h + 0.15,
-                    str(int(h)), ha="center", va="bottom", fontsize=8)
+    for ri, cat in enumerate(aa_order):
+        for ci, pos in enumerate(positions):
+            ax = axes[ri][ci]
+            sub = df[(df["AA_Cat"] == cat) & (df["Position"] == pos)]
+            tot = tile_totals[(cat, pos)] or 1.0
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(directions, fontsize=TICK_FONTSIZE)
-    ax.set_ylabel("Total substitution count (positions 1–3 pooled)", fontsize=LABEL_FONTSIZE)
-    ax.set_xlabel("Substitution direction  (Yeast base → Human base)", fontsize=LABEL_FONTSIZE)
-    ax.legend(fontsize=TICK_FONTSIZE, frameon=True, framealpha=0.9)
-    ax.grid(True, axis="y", linestyle=":", linewidth=0.5, alpha=0.5)
-    ax.set_axisbelow(True)
-    ax.margins(y=0.12)
+            counts = np.zeros((4, 4), dtype=int)
+            for _, r in sub.iterrows():
+                yi = bases.index(r["Yeast_Base"]) if r["Yeast_Base"] in bases else None
+                hi = bases.index(r["Human_Base"]) if r["Human_Base"] in bases else None
+                if yi is None or hi is None:
+                    continue
+                counts[yi, hi] += int(r["Count"])
+
+            pct = np.zeros((4, 4), dtype=float)
+            for yi in range(4):
+                for hi in range(4):
+                    if yi == hi:
+                        continue
+                    pct[yi, hi] = 100.0 * counts[yi, hi] / tot
+
+            # Draw cells manually to allow "Same" labels on the diagonal.
+            for yi in range(4):
+                for hi in range(4):
+                    if yi == hi:
+                        rect_color = "#EEEEEE"
+                        ax.add_patch(plt.Rectangle((hi - 0.5, yi - 0.5), 1, 1,
+                                                    facecolor=rect_color,
+                                                    edgecolor="white", lw=1.0))
+                        ax.text(hi, yi, "Same", ha="center", va="center",
+                                fontsize=9, color="#999999", style="italic")
+                        continue
+                    c = cmap(norm(pct[yi, hi]))
+                    ax.add_patch(plt.Rectangle((hi - 0.5, yi - 0.5), 1, 1,
+                                                facecolor=c, edgecolor="white", lw=1.0))
+                    # Text color depends on luminance of fill
+                    lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+                    text_color = "white" if lum < 0.55 else "#1a1a1a"
+                    ax.text(hi, yi, f"{counts[yi, hi]}\n({pct[yi, hi]:.1f}%)",
+                            ha="center", va="center", fontsize=9,
+                            fontweight="bold", color=text_color)
+
+            ax.set_xticks(range(4))
+            ax.set_yticks(range(4))
+            ax.set_xticklabels(bases, fontsize=TICK_FONTSIZE + 1, fontweight="bold")
+            ax.set_yticklabels(bases, fontsize=TICK_FONTSIZE + 1, fontweight="bold")
+            ax.set_xlim(-0.5, 3.5)
+            ax.set_ylim(3.5, -0.5)
+            ax.set_aspect("equal")
+            ax.set_title(f"{cat} | Position {pos}",
+                          fontsize=TITLE_FONTSIZE - 1, fontweight="bold", pad=6)
+            if ri == 1:
+                ax.set_xlabel("Human nucleotide", fontsize=LABEL_FONTSIZE)
+            if ci == 0:
+                ax.set_ylabel("Yeast nucleotide", fontsize=LABEL_FONTSIZE)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            ax.tick_params(axis="both", length=0)
+
+    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    cbar_ax = fig.add_axes([0.93, 0.18, 0.018, 0.64])
+    cbar = fig.colorbar(sm, cax=cbar_ax)
+    cbar.set_label("Substitution fraction within codon position (%)",
+                   fontsize=LABEL_FONTSIZE)
+    cbar.ax.tick_params(labelsize=TICK_FONTSIZE)
 
     fig.suptitle(
-        "Yeast → Human COX1 substitutions: synonymous vs non-synonymous\n"
-        "Codon positions 1–3 pooled;  sorted by total count",
-        fontsize=TITLE_FONTSIZE - 1, y=1.02,
+        "12-state substitution spectrum in mt-COX1 (Yeast → Human)",
+        fontsize=TITLE_FONTSIZE + 2, fontweight="bold", y=0.99,
     )
-    fig.tight_layout()
+    fig.text(0.5, 0.05,
+             "Diagonal cells mark unchanged nucleotides and are excluded "
+             "from the 12-state count.",
+             ha="center", fontsize=TICK_FONTSIZE, style="italic",
+             color="#555555")
+    fig.tight_layout(rect=[0, 0.06, 0.91, 0.96])
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return Path(out_path)

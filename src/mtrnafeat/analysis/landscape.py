@@ -44,6 +44,14 @@ def compute_empirical_freqs(db_path) -> dict[str, float]:
     return {b: counts[b] / total for b in "AUGC"}
 
 
+def _base_composition(seq: str) -> dict[str, float]:
+    s = seq.upper()
+    n = len(s)
+    if n == 0:
+        return {b: 0.0 for b in "ACGU"}
+    return {b: 100.0 * s.count(b) / n for b in "ACGU"}
+
+
 def species_freqs_for_pipeline(cfg: Config) -> dict[str, dict[str, float]]:
     """Return {species: {A,U,G,C}} for every species declared in cfg.db_files,
     using either cfg.sim_freqs_per_species (if provided) or empirical .db data."""
@@ -142,6 +150,7 @@ def experimental_overlay(cfg: Config) -> pd.DataFrame:
         for rec in parse_db(path):
             length = len(rec.sequence)
             gc_pair, au_pair, gu_pair = paired_composition(rec.sequence, rec.structure)
+            base = _base_composition(rec.sequence)
             rows.append({
                 "Condition": f"Exp: {species} DMS",
                 "Data_Type": "Experimental",
@@ -153,5 +162,66 @@ def experimental_overlay(cfg: Config) -> pd.DataFrame:
                 "Paired_GC_Pct": gc_pair,
                 "Paired_AU_Pct": au_pair,
                 "Paired_GU_Pct": gu_pair,
+                "Pct_A": base["A"],
+                "Pct_C": base["C"],
+                "Pct_G": base["G"],
+                "Pct_U": base["U"],
             })
+    return pd.DataFrame(rows)
+
+
+def simulate_biased_gradient(cfg: Config) -> pd.DataFrame:
+    """Per-species GC gradient that PRESERVES the empirical C:G and A:U ratios.
+
+    The standard ``simulate_gradient`` uses symmetric base ratios (G=C, A=U).
+    This variant fixes the species-specific C/(G+C) and A/(A+U) splits across
+    the whole 0–100% GC sweep, so the resulting null cloud reflects how
+    species-biased strand chemistry (e.g. human heavy strand: C ≫ G, A ≫ U)
+    behaves along the same GC axis.
+    """
+    rng = make_rng(cfg.seed + 7)
+    rows: list[dict] = []
+    species_freqs = species_freqs_for_pipeline(cfg)
+    gc_steps = np.linspace(0.0, 1.0, cfg.gradient_steps)
+    step(f"simulating biased GC gradient per species "
+         f"({cfg.gradient_steps} steps × {cfg.gradient_seqs_per_step} seq)")
+
+    for species, freqs in species_freqs.items():
+        emp_gc = freqs["G"] + freqs["C"]
+        emp_au = freqs["A"] + freqs["U"]
+        # Split ratios within GC and AU; default to symmetric if a class is
+        # empty in the empirical data (unlikely but safe).
+        c_share = freqs["C"] / emp_gc if emp_gc > 0 else 0.5
+        a_share = freqs["A"] / emp_au if emp_au > 0 else 0.5
+        for gc in progress(gc_steps, desc=f"biased gradient {species}", unit="GC"):
+            gc_f = float(gc)
+            au_f = 1.0 - gc_f
+            biased = {
+                "C": gc_f * c_share,
+                "G": gc_f * (1.0 - c_share),
+                "A": au_f * a_share,
+                "U": au_f * (1.0 - a_share),
+            }
+            for _ in range(cfg.gradient_seqs_per_step):
+                seq = random_sequence_with_freqs(cfg.sim_seq_length, biased, rng)
+                struct, mfe = thermo.fold_mfe(seq)
+                length = len(seq)
+                gc_pair, au_pair, gu_pair = paired_composition(seq, struct)
+                base = _base_composition(seq)
+                rows.append({
+                    "Condition": f"Biased gradient ({species})",
+                    "Data_Type": "Simulation",
+                    "Species": species,
+                    "Sequence_GC_Pct": sequence_gc_pct(seq),
+                    "GC_Target_Pct": gc_f * 100.0,
+                    "Foldedness_Pct": 100.0 * paired_fraction(struct),
+                    "Normalized_MFE_per_nt": mfe / length,
+                    "Paired_GC_Pct": gc_pair,
+                    "Paired_AU_Pct": au_pair,
+                    "Paired_GU_Pct": gu_pair,
+                    "Pct_A": base["A"],
+                    "Pct_C": base["C"],
+                    "Pct_G": base["G"],
+                    "Pct_U": base["U"],
+                })
     return pd.DataFrame(rows)

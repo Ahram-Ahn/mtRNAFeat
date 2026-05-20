@@ -81,12 +81,12 @@ def test_gap_heatmap_panels_creates_one_file(mock_full, tmp_path):
     assert p.name == "cofold_parameter_landscape.png"
 
 
-def test_per_window_corr_curves_creates_two_files(mock_win, tmp_path):
-    paths = cofold_plot.per_window_corr_curves(mock_win, tmp_path, "png", dpi=72)
+def test_per_gene_landscape_creates_per_species_files(mock_full, tmp_path):
+    paths = cofold_plot.per_gene_landscape(mock_full, tmp_path, "png", dpi=72)
     assert len(paths) == 2
     names = {p.name for p in paths}
-    assert "cofold_per_window_rmse_human.png" in names
-    assert "cofold_per_window_rmse_yeast.png" in names
+    assert "cofold_parameter_landscape_human.png" in names
+    assert "cofold_parameter_landscape_yeast.png" in names
     for p in paths:
         assert p.stat().st_size > 1_000
 
@@ -124,4 +124,4 @@ def test_gap_strip_panels_is_alias():
 def test_empty_dataframe_guard(tmp_path):
     assert cofold_plot.gap_closure_panels(pd.DataFrame(), tmp_path, "png") == []
     assert cofold_plot.gap_heatmap_panels(pd.DataFrame(), tmp_path, "png") == []
-    assert cofold_plot.per_window_corr_curves(pd.DataFrame(), tmp_path, "png") == []
+    assert cofold_plot.per_gene_landscape(pd.DataFrame(), tmp_path, "png") == []

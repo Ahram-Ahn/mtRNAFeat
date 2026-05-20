@@ -27,28 +27,30 @@ import pandas as pd
 from matplotlib.patches import Rectangle
 
 from mtrnafeat.analysis.deviation import DeviationResult
-from mtrnafeat.constants import PALETTE
 from mtrnafeat.io.annotations import annotation_for
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     LINEWIDTH,
     TITLE_FONTSIZE,
-    add_region_track,
     apply_theme,
-    legend_outside,
     panel_label,
     style_axis,
 )
 
 
 CLASS_COLORS = {
-    "model_high_dms_low": PALETTE.get("DMS", "#1F77B4"),
-    "model_low_dms_high": PALETTE.get("RNAstructure", "#8C564B"),
+    "model_high_dms_low": "#1F77B4",   # blue (RNAplfold-rich)
+    "model_low_dms_high": "#2CA02C",   # green (DMS-rich)
     "concordant_paired": "#444444",
     "concordant_open": "#BFBFBF",
-    "mixed_deviation": PALETTE.get("Cotrans", "#9467BD"),
+    "mixed_deviation": "#9467BD",      # purple
     "ambiguous": "#E0E0E0",
 }
+
+_RNAPLFOLD_COLOR = "#1F77B4"   # blue
+_DMS_TRACK_COLOR = "#2CA02C"   # green
+_UTR_COLOR = "#BDBDBD"
+_CDS_COLOR = "#4DAF4A"
 
 CLASS_ORDER = (
     "model_high_dms_low",
@@ -68,8 +70,6 @@ CLASS_SHORT_LABEL = {
     "ambiguous": "ambiguous",
 }
 
-TIS_SHADE_COLOR = "#FFD45A"
-TIS_SHADE_ALPHA = 0.18
 
 
 # ──────────────────────── Per-gene figure ────────────────────────
@@ -119,8 +119,8 @@ def plot_one_gene(result: DeviationResult,
     except KeyError:
         annot = None
 
-    rnap_color = PALETTE.get("DMS", "#1F77B4")
-    dms_color = PALETTE.get("RNAstructure", "#8C564B")
+    rnap_color = _RNAPLFOLD_COLOR
+    dms_color = _DMS_TRACK_COLOR
 
     fig = plt.figure(figsize=(13.5, 8.4))
     gs = fig.add_gridspec(4, 1, height_ratios=[3.0, 3.0, 2.8, 1.0],
@@ -196,24 +196,12 @@ def plot_one_gene(result: DeviationResult,
         thr = float(cfg.structure_deviation_threshold)
         ax_c.axhline(thr, color="black", lw=0.6, ls=":", alpha=0.6)
         ax_c.axhline(-thr, color="black", lw=0.6, ls=":", alpha=0.6)
-    # Region rectangles colored by class. Visual encoding is already
-    # carried by (a) these tinted bands, (b) the colored region blocks
-    # on the architecture bar (panel D), and (c) the bottom legend.
-    # Inline class-name annotations stack on top of each other on
-    # gene-dense transcripts and add no information — omitted on
-    # purpose.
+    # Region rectangles (the tinted bands) were removed at user request.
+    # The deviation signal stands on its own; classes are reported only
+    # in the CSV outputs.
     classes_present: set[str] = set()
     for _, r in regions_df.iterrows():
-        cls = r["Region_Class"]
-        classes_present.add(cls)
-        color = CLASS_COLORS.get(cls, "#888888")
-        rect = Rectangle(
-            (int(r["Start_1based"]), -mag * 1.05),
-            int(r["End_1based"]) - int(r["Start_1based"]),
-            mag * 2.10,
-            color=color, alpha=0.22, zorder=0,
-        )
-        ax_c.add_patch(rect)
+        classes_present.add(r["Region_Class"])
     ax_c.set_ylim(-mag * 1.05, mag * 1.05)
     win_tag = f" (per-{scan_w}nt window)" if scan_w else ""
     ax_c.set_ylabel(f"Signed deviation{win_tag}\n(MFE − DMS)",
@@ -223,48 +211,35 @@ def plot_one_gene(result: DeviationResult,
     ax_c.set_axisbelow(True)
     style_axis(ax_c)
 
-    # Panel D — gene architecture + region blocks colored by class
+    # Panel D — clean gene architecture bar. No inline 5'UTR / CDS / 3'UTR
+    # text labels and no region-class blocks above the bar; that visual
+    # encoding belongs in the bottom legend.
     if annot is not None:
-        add_region_track(
-            ax_d,
-            l_utr5=int(annot["l_utr5"]),
-            l_cds=int(annot["l_cds"]),
-            transcript_len=n,
-        )
-        cds_start_1 = int(annot["l_utr5"]) + 1
+        l_utr5 = int(annot["l_utr5"])
+        l_cds = int(annot["l_cds"])
+        cds_start_1 = l_utr5 + 1
+        cds_end = l_utr5 + l_cds
+        utr3_start = cds_end + 1
+        if l_utr5 >= 1:
+            ax_d.add_patch(Rectangle((1, 0.18), l_utr5, 0.64,
+                                      color=_UTR_COLOR, ec=None))
+        if cds_end >= cds_start_1:
+            ax_d.add_patch(Rectangle((cds_start_1, 0.18),
+                                      cds_end - cds_start_1 + 1, 0.64,
+                                      color=_CDS_COLOR, ec=None))
+        if n >= utr3_start:
+            ax_d.add_patch(Rectangle((utr3_start, 0.18),
+                                      n - utr3_start + 1, 0.64,
+                                      color=_UTR_COLOR, ec=None))
         ax_d.axvline(cds_start_1, color="black", lw=1.0, ls="-",
                      alpha=0.65, zorder=4)
-    # Region blocks drawn just above the architecture bar
-    for _, r in regions_df.iterrows():
-        cls = r["Region_Class"]
-        color = CLASS_COLORS.get(cls, "#888888")
-        rect = Rectangle(
-            (int(r["Start_1based"]), 0.55),
-            int(r["End_1based"]) - int(r["Start_1based"]),
-            0.30,
-            color=color, alpha=0.85, zorder=5,
-        )
-        ax_d.add_patch(rect)
     ax_d.set_xlim(1, n)
-    ax_d.set_ylim(-0.05, 1.05)
+    ax_d.set_ylim(0, 1)
     ax_d.set_xlabel("Transcript position (nt)", fontsize=LABEL_FONTSIZE)
     ax_d.set_yticks([])
-    for sp in ("top", "right", "left"):
+    for sp in ("top", "right", "left", "bottom"):
         ax_d.spines[sp].set_visible(False)
     ax_d.tick_params(axis="y", left=False, labelleft=False)
-    style_axis(ax_d)
-
-    # TIS shading vertically through every panel
-    if annot is not None:
-        cds_start_1 = int(annot["l_utr5"]) + 1
-        tis_up = int(cfg.structure_deviation_tis_upstream)
-        tis_down = int(cfg.structure_deviation_tis_downstream)
-        tis_lo = max(1, cds_start_1 - tis_up)
-        tis_hi = min(n, cds_start_1 + tis_down)
-        if tis_hi > tis_lo:
-            for ax in (ax_a, ax_b, ax_c, ax_d):
-                ax.axvspan(tis_lo, tis_hi, color=TIS_SHADE_COLOR,
-                           alpha=TIS_SHADE_ALPHA, zorder=0)
 
     # Title + subtitle
     ax_a.set_title(
@@ -280,17 +255,20 @@ def plot_one_gene(result: DeviationResult,
         fontsize=LABEL_FONTSIZE - 2, color="#555555",
     )
 
-    # Bottom legend: region classes + filled-direction key for panel C
+    # Bottom legend: deviation direction key + transcript-region key
+    # (5'UTR / CDS). Region-class swatches were removed — the region
+    # rectangles are no longer drawn on the plot.
     from matplotlib.patches import Patch as _Patch
-    dir_handles = [
+    legend_handles = [
         _Patch(facecolor=rnap_color, alpha=0.40, label="↑ MFE > DMS (more pairing)"),
         _Patch(facecolor=dms_color, alpha=0.40, label="↓ DMS > MFE (more protected)"),
+        _Patch(facecolor=_UTR_COLOR, label="5'UTR / 3'UTR"),
+        _Patch(facecolor=_CDS_COLOR, label="CDS"),
     ]
-    dir_labels = ["↑ MFE > DMS (more pairing)", "↓ DMS > MFE (more protected)"]
-    _draw_class_legend(fig,
-                       sorted(classes_present,
-                              key=lambda c: CLASS_ORDER.index(c) if c in CLASS_ORDER else 999),
-                       extra_handles=dir_handles, extra_labels=dir_labels)
+    fig.legend(legend_handles,
+               [h.get_label() for h in legend_handles],
+               loc="lower center", bbox_to_anchor=(0.5, 0.0),
+               ncol=4, frameon=True, framealpha=0.9, fontsize=9)
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)

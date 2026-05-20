@@ -27,29 +27,32 @@ import pandas as pd
 from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
 
 _SPECIES_ORDER = ["Human", "Yeast"]
-_DMS_COLOR = "#1F4E79"
-_MFE_COLOR = "#C0392B"
+# Replaced the previous red / blue pairing — the user found that combination
+# hard to read. Teal vs amber keeps the two series easily distinguishable
+# under all common color-vision deficiencies and reads as paired rather
+# than oppositional.
+_DMS_COLOR = "#2A9D8F"   # teal
+_MFE_COLOR = "#E9A82B"   # amber
 _ZERO_MARKER_COLOR = "#222222"
 
 
 def _bar_with_zero_handling(ax, xs, values, width, color, label, full_ctx):
     """Draw bars; emit a zero-marker diamond when value == 0 and an 'n/a'
-    annotation when value is NaN. Returns the BarContainer (without the
-    NaN slots, which would otherwise paint as zero-height rectangles)."""
+    annotation when value is NaN. Truncated-context bars (5'UTR shorter
+    than the requested window) are flagged with a "*" suffix on the
+    tick label instead of a hatched bar fill, which the user found
+    visually noisy."""
     safe_vals = np.where(np.isnan(values), 0.0, values)
     bars = ax.bar(xs, safe_vals, width=width, color=color, label=label,
                    edgecolor="#333333", linewidth=0.7, zorder=3)
-    for bar, raw, full in zip(bars, values, full_ctx):
+    for bar, raw, _full in zip(bars, values, full_ctx):
         if np.isnan(raw):
             bar.set_visible(False)
             ax.annotate("n/a", xy=(bar.get_x() + bar.get_width() / 2, 0),
                         xytext=(0, 8), textcoords="offset points",
-                        ha="center", va="bottom", fontsize=8, color="#888888",
+                        ha="center", va="bottom", fontsize=10, color="#888888",
                         zorder=4)
             continue
-        if not full:
-            bar.set_hatch("///")
-            bar.set_edgecolor("white")
         if abs(raw) < 1e-6:
             ax.plot(bar.get_x() + bar.get_width() / 2, 0,
                      marker="D", markersize=6,
@@ -81,18 +84,22 @@ def _draw_one(ax, sub: pd.DataFrame, species: str) -> None:
         width, _MFE_COLOR, "Vienna prediction", full_ctx,
     )
 
-    # Gene name tick labels; * flags truncated 5'UTR context
+    # Gene name tick labels; * flags truncated 5'UTR context. Labels are
+    # drawn diagonally so multi-character mt gene names (ATP8_ATP6,
+    # ND4L_ND4) have room and stay legible at journal print size.
     gene_labels = [f"{g}*" if not full else str(g)
                    for g, full in zip(sub["Gene"], full_ctx)]
     ax.set_xticks(list(ind))
-    ax.set_xticklabels(gene_labels, rotation=0, fontsize=9, fontweight="bold")
+    ax.set_xticklabels(gene_labels, rotation=45, ha="right",
+                        fontsize=LABEL_FONTSIZE + 2, fontweight="bold")
     ax.set_xlim(-0.5, len(sub) - 0.5)
     ax.set_xlabel("Gene  (* = 5'UTR shorter than upstream window)",
-                  fontsize=LABEL_FONTSIZE)
+                  fontsize=LABEL_FONTSIZE + 1)
 
     ax.axhline(0, color="black", lw=0.8, zorder=2)
-    ax.set_title(species, fontsize=TITLE_FONTSIZE - 1, pad=8, fontweight="bold")
-    ax.set_ylabel("ΔG (kcal/mol)", fontsize=LABEL_FONTSIZE)
+    ax.set_title(species, fontsize=TITLE_FONTSIZE + 1, pad=8, fontweight="bold")
+    ax.set_ylabel("ΔG (kcal/mol)", fontsize=LABEL_FONTSIZE + 1)
+    ax.tick_params(axis="y", labelsize=LABEL_FONTSIZE)
     ax.grid(True, axis="y", linestyle=":", linewidth=0.6, alpha=0.45)
     ax.set_axisbelow(True)
     style_axis(ax)
@@ -129,9 +136,6 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
         plt.Rectangle((0, 0), 1, 1, facecolor=_MFE_COLOR,
                        edgecolor="#333333", linewidth=0.7,
                        label="Vienna prediction"),
-        plt.Rectangle((0, 0), 1, 1, facecolor="white", edgecolor="#333333",
-                       linewidth=0.7, hatch="///",
-                       label="* 5'UTR shorter than window"),
         plt.Line2D([0], [0], marker="D", color="none",
                     markerfacecolor="white",
                     markeredgecolor=_ZERO_MARKER_COLOR,
@@ -139,9 +143,9 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
                     label="ΔG = 0 (no pairs)"),
     ]
     fig.legend(handles=handles, loc="upper right", ncol=1,
-                frameon=True, framealpha=0.9, fontsize=10)
+                frameon=True, framealpha=0.9, fontsize=11)
     fig.suptitle("TIS zoom — DMS vs Vienna ΔG around the start codon (−50 / +50 nt)",
-                  fontsize=TITLE_FONTSIZE - 1, y=1.02, fontweight="bold")
+                  fontsize=TITLE_FONTSIZE + 1, y=1.02, fontweight="bold")
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)

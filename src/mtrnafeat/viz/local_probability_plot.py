@@ -33,15 +33,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mtrnafeat.constants import PALETTE
 from mtrnafeat.io.annotations import annotation_for
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     LINEWIDTH,
     TITLE_FONTSIZE,
-    add_region_track,
     apply_theme,
-    legend_outside,
     panel_label,
     style_axis,
 )
@@ -51,8 +48,14 @@ from mtrnafeat.viz.style import (
 # wallpaper of noise that overpowers the smoothed line. The smoothed
 # line still tells the story by itself.
 _LONG_TRANSCRIPT_NT = 1000
-TIS_SHADE_COLOR = "#FFD45A"
-TIS_SHADE_ALPHA = 0.18
+
+# Distinct, less-saturated palette for the per-gene tracks (the previous
+# orange / yellow scheme bled into the TIS shade and read as one mass).
+_RNAPLFOLD_COLOR = "#1F77B4"   # blue
+_DMS_TRACK_COLOR = "#2CA02C"   # green
+_DELTA_COLOR = "#444444"
+_UTR_COLOR = "#BDBDBD"
+_CDS_COLOR = "#4DAF4A"
 
 
 def _has_dms_overlay(gene_df: pd.DataFrame) -> bool:
@@ -61,36 +64,38 @@ def _has_dms_overlay(gene_df: pd.DataFrame) -> bool:
     return bool(gene_df["DMS_Paired_Smoothed"].notna().any())
 
 
-def _tis_window_1based(annot: dict, n: int,
-                       upstream: int, downstream: int) -> tuple[int, int] | None:
-    """Translate the TIS window into 1-based inclusive plot coordinates."""
-    cds_start_1 = int(annot["l_utr5"]) + 1
-    lo = max(1, cds_start_1 - int(upstream))
-    hi = min(n, cds_start_1 + int(downstream))
-    if hi <= lo:
-        return None
-    return lo, hi
+def _draw_architecture_clean(ax_arch, n: int, annot: dict | None) -> None:
+    """Architecture bar with NO inline 5'UTR/CDS/3'UTR text labels.
 
-
-def _draw_tis_shade(ax, lo: int, hi: int) -> None:
-    ax.axvspan(lo, hi, color=TIS_SHADE_COLOR, alpha=TIS_SHADE_ALPHA, zorder=0)
-
-
-def _draw_architecture(ax_arch, species: str, gene: str, n: int,
-                       annot: dict | None,
-                       tis_upstream: int, tis_downstream: int) -> None:
+    The legend at the figure level carries the colour key, so the bar
+    itself stays compact and uncluttered. The CDS-start position is
+    marked with a thin vertical line.
+    """
+    from matplotlib.patches import Rectangle
     if annot is None:
         ax_arch.axis("off")
         return
-    add_region_track(
-        ax_arch,
-        l_utr5=int(annot["l_utr5"]),
-        l_cds=int(annot["l_cds"]),
-        transcript_len=n,
-    )
-    cds_start_1 = int(annot["l_utr5"]) + 1
-    ax_arch.axvline(cds_start_1, color="black", lw=1.0, ls="-", alpha=0.65,
+    l_utr5 = int(annot["l_utr5"])
+    l_cds = int(annot["l_cds"])
+    cds_start = l_utr5 + 1
+    cds_end = l_utr5 + l_cds
+    utr3_start = cds_end + 1
+    ax_arch.set_xlim(1, n)
+    ax_arch.set_ylim(0, 1)
+    if l_utr5 >= 1:
+        ax_arch.add_patch(Rectangle((1, 0.18), l_utr5, 0.64,
+                                     color=_UTR_COLOR, ec=None))
+    if cds_end >= cds_start:
+        ax_arch.add_patch(Rectangle((cds_start, 0.18),
+                                     cds_end - cds_start + 1, 0.64,
+                                     color=_CDS_COLOR, ec=None))
+    if n >= utr3_start:
+        ax_arch.add_patch(Rectangle((utr3_start, 0.18),
+                                     n - utr3_start + 1, 0.64,
+                                     color=_UTR_COLOR, ec=None))
+    ax_arch.axvline(cds_start, color="black", lw=1.0, ls="-", alpha=0.65,
                     zorder=4)
+    ax_arch.axis("off")
 
 
 def _context_subtitle(annot: dict | None, window: int, span: int,
@@ -101,6 +106,14 @@ def _context_subtitle(annot: dict | None, window: int, span: int,
         parts.append(f"CDS={int(annot['l_cds'])} nt")
     parts.append(f"TIS=−{int(tis_upstream)}/+{int(tis_downstream)} nt")
     return "  ·  ".join(parts)
+
+
+def _region_legend_handles():
+    from matplotlib.patches import Patch
+    return [
+        Patch(facecolor=_UTR_COLOR, label="5'UTR / 3'UTR"),
+        Patch(facecolor=_CDS_COLOR, label="CDS"),
+    ]
 
 
 def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
@@ -129,10 +142,6 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         annot = annotation_for(species, gene)
     except KeyError:
         annot = None
-    tis_window = (
-        _tis_window_1based(annot, n, tis_upstream, tis_downstream)
-        if annot is not None else None
-    )
 
     x = gene_df["Position_1based"].to_numpy()
     raw = gene_df["P_Paired"].to_numpy()
@@ -149,14 +158,9 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
     raw_alpha = 0.10 if is_long else 0.30
     raw_lw = LINEWIDTH * 0.30 if is_long else LINEWIDTH * 0.45
 
-    # Convention: RNAplfold uses the existing "DMS" palette key (blue) so
-    # the legacy plots stay visually consistent. The newly-overlaid
-    # *DMS-derived* track is rendered with the RNAstructure brown — the
-    # .db dot-bracket was actually produced by RNAstructure upstream, so
-    # the color is semantically apt and clearly distinct from the blue.
-    rnap_color = PALETTE.get("DMS", "#1F77B4")
-    dms_color = PALETTE.get("RNAstructure", "#8C564B")
-    delta_color = "#444444"
+    rnap_color = _RNAPLFOLD_COLOR
+    dms_color = _DMS_TRACK_COLOR
+    delta_color = _DELTA_COLOR
 
     if has_dms:
         fig = plt.figure(figsize=(13.5, 8.4))
@@ -244,9 +248,9 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         ax_delta.set_axisbelow(True)
         style_axis(ax_delta)
 
-        # Track 4: architecture bar
-        _draw_architecture(ax_arch, species, gene, n, annot,
-                           int(tis_upstream), int(tis_downstream))
+        # Track 4: architecture bar — no inline 5'UTR/CDS/3'UTR labels;
+        # they appear in the figure legend instead.
+        _draw_architecture_clean(ax_arch, n, annot)
         ax_arch.set_xlim(1, n)
         ax_arch.set_xlabel("Transcript position (nt)", fontsize=LABEL_FONTSIZE)
         ax_arch.set_yticks([])
@@ -254,13 +258,6 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             ax_arch.spines[sp].set_visible(False)
         ax_arch.tick_params(axis="y", left=False, labelleft=False)
         style_axis(ax_arch)
-
-        # TIS shading runs through all four panels so the eye locks onto
-        # the start-codon context. Drawn at zorder=0, behind the data.
-        if tis_window is not None:
-            tlo, thi = tis_window
-            for ax in (ax_p, ax_dms, ax_delta, ax_arch):
-                _draw_tis_shade(ax, tlo, thi)
 
         ax_p.set_title(
             f"{species} {gene} — RNAplfold local pair probability "
@@ -275,15 +272,18 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             fontsize=LABEL_FONTSIZE - 2, color="#555555",
         )
 
-        # Consolidated legend below the figure
+        # Consolidated legend below the figure: track entries + region key
         all_handles, all_labels = [], []
         for axx in (ax_p, ax_dms, ax_delta):
             h, l = axx.get_legend_handles_labels()
             all_handles.extend(h)
             all_labels.extend(l)
+        region_handles = _region_legend_handles()
+        all_handles.extend(region_handles)
+        all_labels.extend([h.get_label() for h in region_handles])
         if all_handles:
             fig.legend(all_handles, all_labels, loc="lower center",
-                       bbox_to_anchor=(0.5, -0.06), ncol=3,
+                       bbox_to_anchor=(0.5, -0.08), ncol=4,
                        frameon=True, framealpha=0.9, fontsize=9)
     else:
         # Legacy 2-panel fallback (no DMS overlay available)
@@ -314,11 +314,17 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             transform=ax.transAxes, ha="center", va="bottom",
             fontsize=LABEL_FONTSIZE - 2, color="#555555",
         )
-        ax.legend(loc="upper right", fontsize=9, frameon=True, framealpha=0.9)
+        # Track legend + region legend below the figure (no inline UTR text)
+        track_handles, track_labels = ax.get_legend_handles_labels()
+        region_handles = _region_legend_handles()
+        legend_handles = list(track_handles) + region_handles
+        legend_labels = list(track_labels) + [h.get_label() for h in region_handles]
+        fig.legend(legend_handles, legend_labels, loc="lower center",
+                   bbox_to_anchor=(0.5, -0.08), ncol=4,
+                   frameon=True, framealpha=0.9, fontsize=9)
         style_axis(ax)
 
-        _draw_architecture(ax_arch, species, gene, n, annot,
-                           int(tis_upstream), int(tis_downstream))
+        _draw_architecture_clean(ax_arch, n, annot)
         ax_arch.set_xlim(1, n)
         ax_arch.set_xlabel("Transcript position (nt)", fontsize=LABEL_FONTSIZE)
         ax_arch.set_yticks([])
@@ -326,11 +332,6 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
             ax_arch.spines[sp].set_visible(False)
         ax_arch.tick_params(axis="y", left=False, labelleft=False)
         style_axis(ax_arch)
-
-        if tis_window is not None:
-            tlo, thi = tis_window
-            for axx in (ax, ax_arch):
-                _draw_tis_shade(axx, tlo, thi)
 
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
