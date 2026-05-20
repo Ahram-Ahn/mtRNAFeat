@@ -1,0 +1,46 @@
+# Small validation run for the May-2026 figure rework.
+# Uses real .db files but minimal simulation counts so a full run lands
+# in well under five minutes on a laptop.
+#
+# Run:
+#   mtrnafeat run-all --config configs/test4.yaml --outdir runs/test4 -- --skip kinetic
+
+seed: 42
+data_dir: data
+outdir: runs/test4
+
+target_genes:
+  # Shared by both species (compare needs COX1)
+  - COX1
+  - ATP86
+  # Human-only
+  - ND6
+  # Yeast-only
+  - ATP9
+
+n_workers: 4
+
+sim_seq_length: 120
+sim_num_sequences: 200
+gradient_steps: 9
+gradient_seqs_per_step: 60
+n_shuffles: 50
+
+window_nt: 80
+step_nt: 20
+max_bp_span: 200
+
+cofold_alpha_sweep: [0.0, 0.25, 0.5, 0.75, 1.0]
+cofold_tau_sweep: [160.0, 320.0, 640.0]
+cofold_alpha: 0.5
+cofold_tau: 640.0
+fold_engine: vienna
+
+substitution_n_simulations: 50
+substitution_max_nt: 300
+
+max_loop_artifact_size: 50
+max_heatmap_size: 12
+
+dpi: 150
+plot_format: svg

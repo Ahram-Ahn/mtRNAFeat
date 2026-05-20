@@ -76,7 +76,7 @@ import pandas as pd
 from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
-from mtrnafeat.core.projection import truncate_prefix
+from mtrnafeat.core.projection import project_structure_to_window, truncate_prefix
 from mtrnafeat.io.annotations import annotation_for
 from mtrnafeat.io.codons import codon_table_for
 from mtrnafeat.io.db_parser import parse_db
@@ -426,14 +426,21 @@ def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
 
             # Synonymous-codon shuffling requires CDS-only input — UTR
             # nucleotides have no codon table and would corrupt every
-            # codon-aware null. Slice using the species annotation; fall
-            # back to the full record only when we have no annotation.
+            # codon-aware null. Slice using the species annotation; the
+            # structure must be projected (not just sliced) so any pairs
+            # crossing the CDS boundary become '.' instead of leaving
+            # an unbalanced dot-bracket that segfaults ViennaRNA.
             try:
                 annot = annotation_for(species, target)
                 l_utr5 = int(annot["l_utr5"])
                 l_cds = int(annot["l_cds"])
                 cds_seq = rec.sequence[l_utr5:l_utr5 + l_cds]
-                cds_struct = (rec.structure or "")[l_utr5:l_utr5 + l_cds]
+                if rec.structure:
+                    cds_struct = project_structure_to_window(
+                        rec.structure, l_utr5, l_utr5 + l_cds,
+                    )
+                else:
+                    cds_struct = ""
             except KeyError:
                 cds_seq = rec.sequence
                 cds_struct = rec.structure or ""
