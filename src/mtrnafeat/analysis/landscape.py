@@ -33,10 +33,26 @@ from mtrnafeat.progress import progress, step
 from mtrnafeat.rng import make_rng
 
 
-def compute_empirical_freqs(db_path) -> dict[str, float]:
-    """Aggregate (A, U, G, C) frequency over every record in a .db file."""
+#: Genes to drop when computing **heavy-strand-only** species frequencies.
+#: Human ND6 is the sole H-strand-template / L-strand-encoded mt-mRNA, so its
+#: base composition is the opposite skew (G≫C, U≫A) of the other 12 H-strand
+#: mRNAs and would dilute the H-strand C-enrichment if included.
+HEAVY_STRAND_EXCLUSIONS: dict[str, frozenset[str]] = {
+    "Human": frozenset({"ND6"}),
+}
+
+
+def compute_empirical_freqs(db_path, exclude_genes: frozenset[str] = frozenset()) -> dict[str, float]:
+    """Aggregate (A, U, G, C) frequency over records in a .db file.
+
+    If ``exclude_genes`` is non-empty, records whose canonical gene name is in
+    that set are skipped — used to compute heavy-strand-only frequencies by
+    dropping L-strand-encoded transcripts (e.g. human ND6).
+    """
     counts: Counter[str] = Counter()
     for rec in parse_db(db_path):
+        if rec.gene in exclude_genes:
+            continue
         counts.update(rec.sequence.upper())
     total = sum(counts[b] for b in "AUGC")
     if total == 0:
@@ -52,16 +68,23 @@ def _base_composition(seq: str) -> dict[str, float]:
     return {b: 100.0 * s.count(b) / n for b in "ACGU"}
 
 
-def species_freqs_for_pipeline(cfg: Config) -> dict[str, dict[str, float]]:
+def species_freqs_for_pipeline(cfg: Config, heavy_strand: bool = False) -> dict[str, dict[str, float]]:
     """Return {species: {A,U,G,C}} for every species declared in cfg.db_files,
-    using either cfg.sim_freqs_per_species (if provided) or empirical .db data."""
+    using either cfg.sim_freqs_per_species (if provided) or empirical .db data.
+
+    When ``heavy_strand`` is True, empirical frequencies are computed from
+    H-strand-encoded transcripts only (see :data:`HEAVY_STRAND_EXCLUSIONS`).
+    Species with no exclusions defined behave identically to the default.
+    Explicit overrides in ``cfg.sim_freqs_per_species`` still win.
+    """
     out: dict[str, dict[str, float]] = {}
     given = getattr(cfg, "sim_freqs_per_species", None) or {}
     for species, fname in cfg.db_files.items():
         if species in given:
             out[species] = {b: float(given[species].get(b, 0.0)) for b in "AUGC"}
         else:
-            out[species] = compute_empirical_freqs(cfg.data_dir / fname)
+            exclude = HEAVY_STRAND_EXCLUSIONS.get(species, frozenset()) if heavy_strand else frozenset()
+            out[species] = compute_empirical_freqs(cfg.data_dir / fname, exclude_genes=exclude)
     return out
 
 
@@ -170,7 +193,7 @@ def experimental_overlay(cfg: Config) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def simulate_biased_gradient(cfg: Config) -> pd.DataFrame:
+def simulate_biased_gradient(cfg: Config, heavy_strand: bool = False) -> pd.DataFrame:
     """Per-species GC gradient that PRESERVES the empirical C:G and A:U ratios.
 
     The standard ``simulate_gradient`` uses symmetric base ratios (G=C, A=U).
@@ -178,12 +201,19 @@ def simulate_biased_gradient(cfg: Config) -> pd.DataFrame:
     the whole 0–100% GC sweep, so the resulting null cloud reflects how
     species-biased strand chemistry (e.g. human heavy strand: C ≫ G, A ≫ U)
     behaves along the same GC axis.
+
+    With ``heavy_strand=True``, species ratios come from H-strand transcripts
+    only (drops human ND6, which is L-strand-encoded and reverses the skew).
+    The "Condition" label is suffixed with " — H-strand" so downstream code
+    can distinguish the two clouds when both are merged.
     """
-    rng = make_rng(cfg.seed + 7)
+    seed_offset = 17 if heavy_strand else 7
+    rng = make_rng(cfg.seed + seed_offset)
     rows: list[dict] = []
-    species_freqs = species_freqs_for_pipeline(cfg)
+    species_freqs = species_freqs_for_pipeline(cfg, heavy_strand=heavy_strand)
     gc_steps = np.linspace(0.0, 1.0, cfg.gradient_steps)
-    step(f"simulating biased GC gradient per species "
+    label_tag = "biased H-strand GC gradient" if heavy_strand else "biased GC gradient"
+    step(f"simulating {label_tag} per species "
          f"({cfg.gradient_steps} steps × {cfg.gradient_seqs_per_step} seq)")
 
     for species, freqs in species_freqs.items():
@@ -208,8 +238,9 @@ def simulate_biased_gradient(cfg: Config) -> pd.DataFrame:
                 length = len(seq)
                 gc_pair, au_pair, gu_pair = paired_composition(seq, struct)
                 base = _base_composition(seq)
+                cond_suffix = " — H-strand" if heavy_strand else ""
                 rows.append({
-                    "Condition": f"Biased gradient ({species})",
+                    "Condition": f"Biased gradient ({species}){cond_suffix}",
                     "Data_Type": "Simulation",
                     "Species": species,
                     "Sequence_GC_Pct": sequence_gc_pct(seq),
