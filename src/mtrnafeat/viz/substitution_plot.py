@@ -18,12 +18,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
+    LEGEND_FONTSIZE,
     TITLE_FONTSIZE,
     apply_theme,
-    legend_outside,
     style_axis,
 )
 
@@ -48,12 +50,11 @@ def _kde_for_species(species_dist: pd.DataFrame, species: str,
         return out_path
     cols = min(4, n)
     rows = math.ceil(n / cols)
-    # Wider per-panel allowance so the outside legend (5 pools + 2 WT lines)
-    # doesn't squeeze the data axis.
-    fig, axes = plt.subplots(rows, cols, figsize=(6.4 * cols, 3.4 * rows), squeeze=False)
+    # One shared legend avoids repeating five entries in every small panel.
+    fig, axes = plt.subplots(rows, cols, figsize=(4.9 * cols + 1.9, 3.2 * rows), squeeze=False)
     for ax in axes.flat[n:]:
         ax.axis("off")
-    for ax, gene in zip(axes.flat, genes):
+    for ax, gene in zip(axes.flat, genes, strict=False):
         sub = species_dist[species_dist["Gene"] == gene]
         wt_mfe_row = sub[sub["Pool"] == "WildType_MFE"]["MFE_kcal_per_mol"]
         wt_dms_row = sub[sub["Pool"] == "WildType_DMS_Eval"]["MFE_kcal_per_mol"]
@@ -63,13 +64,13 @@ def _kde_for_species(species_dist: pd.DataFrame, species: str,
             vals = sub[sub["Pool"] == pool]["MFE_kcal_per_mol"].values
             if len(vals) > 5:
                 sns.kdeplot(vals, ax=ax, color=color, fill=True, alpha=0.3,
-                            linewidth=1.6, label=pool)
+                            linewidth=1.6)
         if wt_mfe is not None:
             ax.axvline(wt_mfe, color="black", linestyle="-", linewidth=1.8,
-                       label=f"WT Vienna MFE = {wt_mfe:.1f}")
+                       label="WT Vienna MFE")
         if wt_dms is not None and np.isfinite(wt_dms):
             ax.axvline(wt_dms, color="#D62728", linestyle="--", linewidth=1.8,
-                       label=f"DMS structure, Vienna ΔG = {wt_dms:.1f}")
+                       label="DMS structure, Vienna ΔG")
         ax.set_title(gene, fontsize=TITLE_FONTSIZE - 3)
         ax.set_xlabel(r"$\Delta$G (kcal/mol)", fontsize=LABEL_FONTSIZE - 2)
         ax.set_ylabel("density", fontsize=LABEL_FONTSIZE - 2)
@@ -84,11 +85,21 @@ def _kde_for_species(species_dist: pd.DataFrame, species: str,
             x1 = max(x1, max(wt_xs))
             pad = 0.05 * (x1 - x0)
             ax.set_xlim(x0 - pad, x1 + pad)
-        legend_outside(ax, position="right", fontsize=8, frameon=False)
+    legend_handles = [
+        Patch(facecolor=color, edgecolor=color, alpha=0.30, label=pool)
+        for pool, color in _POOL_COLORS.items()
+    ]
+    legend_handles.extend([
+        Line2D([0], [0], color="black", lw=1.8, label="WT Vienna MFE"),
+        Line2D([0], [0], color="#D62728", lw=1.8, linestyle="--",
+               label="DMS structure, Vienna ΔG"),
+    ])
+    fig.legend(handles=legend_handles, loc="center right", bbox_to_anchor=(0.985, 0.52),
+               frameon=False, fontsize=LEGEND_FONTSIZE + 1)
     fig.suptitle(f"{species} — substitution-thermodynamic permutation test (Vienna MFE)\n"
                  "DMS ΔG = Vienna eval_structure on the .db dot-bracket (header MFE not used)",
                  fontsize=TITLE_FONTSIZE - 2, y=1.01)
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.88, 1.0])
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
     return out_path

@@ -32,7 +32,6 @@ from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 from mtrnafeat.rng import make_rng
 
-
 #: Genes to drop when computing **heavy-strand-only** species frequencies.
 #: Human ND6 is the sole H-strand-template / L-strand-encoded mt-mRNA, so its
 #: base composition is the opposite skew (G≫C, U≫A) of the other 12 H-strand

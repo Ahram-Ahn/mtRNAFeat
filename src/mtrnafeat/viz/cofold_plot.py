@@ -78,7 +78,7 @@ def _draw_closure_panel(ax, species_df: pd.DataFrame, species: str,
 
     ax.axhspan(1.0, 1.6, alpha=0.07, color="#CC0000", zorder=0, lw=0)
 
-    for color, tau in zip(cmap, taus):
+    for color, tau in zip(cmap, taus, strict=True):
         sub = agg[agg["tau"] == tau].sort_values("alpha")
         mu = sub["mu"].to_numpy()
         sd = sub["sd"].fillna(0).to_numpy()
@@ -134,7 +134,7 @@ def gap_closure_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
     n_sp = len(species_present)
     fig, axes = plt.subplots(1, n_sp, figsize=(5.5 * n_sp, 4.6), squeeze=False)
 
-    for ax, sp, letter in zip(axes[0], species_present, "AB"):
+    for ax, sp, letter in zip(axes[0], species_present, "AB", strict=True):
         _draw_closure_panel(ax, df[df["Species"] == sp], sp, taus, cmap)
         panel_label(ax, letter)
 
@@ -231,7 +231,7 @@ def gap_heatmap_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
     vmax = pivot_all["Abs_Gap"].max()
 
     im = None
-    for ax, sp, letter in zip(axes[0], species_present, "AB"):
+    for ax, sp, letter in zip(axes[0], species_present, "AB", strict=True):
         sub = pivot_all[pivot_all["Species"] == sp]
         pivot = sub.pivot(index="tau", columns="alpha", values="Abs_Gap")
         pivot = pivot.iloc[::-1]
@@ -306,7 +306,7 @@ def per_gene_landscape(full: pd.DataFrame, out_dir: Path, plot_format: str,
             ax.axis("off")
 
         im = None
-        for idx, (ax, gene) in enumerate(zip(axes.flat, genes)):
+        for idx, (ax, gene) in enumerate(zip(axes.flat, genes, strict=True)):
             sub = sp_df[sp_df["Gene"] == gene]
             pivot = sub.pivot(index="tau", columns="alpha", values="Abs_Gap")
             pivot = pivot.iloc[::-1]

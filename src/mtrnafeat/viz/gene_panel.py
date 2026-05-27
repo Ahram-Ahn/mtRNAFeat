@@ -103,7 +103,7 @@ def plot_gene(rec: DbRecord, species: str, out_path: Path,
     ax_counts.set_title("Base counts", fontsize=13, fontweight="bold", pad=8)
     ax_counts.set_ylabel("Count")
     ax_counts.margins(y=0.08)
-    for b, v in zip(bars, counts.values()):
+    for b, v in zip(bars, counts.values(), strict=True):
         ax_counts.text(b.get_x() + b.get_width() / 2,
                         v + max(1, max(counts.values()) * 0.015),
                         str(v), ha="center", fontsize=10)

@@ -22,13 +22,12 @@ sequences/structures in the `.db` records:
                               actual realized in-vivo structure more /
                               less stable than what synonymous shuffling
                               can MFE-fold?"
-  - `DMS_FullLen_Vienna`  : same as `WT_DMS_Eval` but for the FULL
-                              transcript-length DMS structure (no codon
-                              truncation), reported once per gene as a
-                              sanity check that the chunk-truncated
-                              value tracks the full-length one. This
-                              column is `NaN` when the gene has no DMS
-                              structure recorded.
+  - `DMS_FullLen_Vienna`  : same as `WT_DMS_Eval` but for the full
+                              CDS DMS structure (no codon truncation),
+                              reported once per gene as a sanity check
+                              that the chunk-truncated value tracks the
+                              full-CDS one. This column is `NaN` when
+                              the gene has no DMS structure recorded.
 
 The `.db` header (e.g. `>COX1: -150.4 kcal/mol`) is parsed only by
 `io/db_parser.py` and consumed only by reporting stages (`stats`,
@@ -82,6 +81,11 @@ from mtrnafeat.io.codons import codon_table_for
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 
+_SPECIES_SEED_OFFSETS = {
+    "human": 101,
+    "yeast": 211,
+}
+
 
 @dataclass(frozen=True)
 class _PrefixJob:
@@ -102,6 +106,18 @@ def _rna(seq: str) -> str:
 
 def _dna(seq: str) -> str:
     return seq.upper().replace("U", "T")
+
+
+def _stable_species_seed_offset(species: str) -> int:
+    """Stable per-species seed offset.
+
+    Python's built-in ``hash()`` is intentionally randomized between
+    interpreter processes, so it must not be used for reproducible outputs.
+    """
+    key = species.strip().lower()
+    if key in _SPECIES_SEED_OFFSETS:
+        return _SPECIES_SEED_OFFSETS[key]
+    return sum((i + 1) * ord(ch) for i, ch in enumerate(key)) % 997
 
 
 def _truncate_codon_aligned(seq: str, max_nt: int | None) -> str:
@@ -258,7 +274,7 @@ def _synonymous_sample(seq_dna: str, table: dict[str, str], pos_gc: dict[int, fl
         threshold = rng.random() * total
         cumulative = 0.0
         chosen = candidates[-1]
-        for cand, w in zip(candidates, weights):
+        for cand, w in zip(candidates, weights, strict=True):
             cumulative += w
             if cumulative >= threshold:
                 chosen = cand
@@ -278,7 +294,6 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
     pos_gc = _positional_gc(seq_dna)
     pos_acgu = _positional_acgu(seq_dna)
     usage_prior = _codon_usage_prior(seq_dna, table)
-    overall_gc = _gc_fraction(seq_dna)
     overall_acgu = _acgu_fraction(seq_dna)
     n_codons = len(seq_dna) // 3
     length = len(seq_dna)
@@ -330,7 +345,10 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
             "Pool": "WildType_MFE",
             "Simulation": 0,
             "MFE_kcal_per_mol": float(wt_mfe),
+            "MFE_kcal_per_nt": float(wt_mfe) / length if length else float("nan"),
             "Length_nt": length,
+            "Sequence_Scope": "CDS codon-aligned prefix",
+            "Max_BP_Span": int(job.max_bp_span),
         },
         {
             "Species": job.species,
@@ -338,7 +356,10 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
             "Pool": "WildType_DMS_Eval",
             "Simulation": 0,
             "MFE_kcal_per_mol": float(wt_dms),
+            "MFE_kcal_per_nt": float(wt_dms) / length if length else float("nan"),
             "Length_nt": length,
+            "Sequence_Scope": "CDS codon-aligned prefix",
+            "Max_BP_Span": int(job.max_bp_span),
         },
         {
             "Species": job.species,
@@ -346,7 +367,13 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
             "Pool": "WildType_DMS_Eval_FullLength",
             "Simulation": 0,
             "MFE_kcal_per_mol": float(wt_dms_fulllen),
+            "MFE_kcal_per_nt": (
+                float(wt_dms_fulllen) / len(job.full_seq_dna)
+                if job.full_seq_dna else float("nan")
+            ),
             "Length_nt": len(job.full_seq_dna),
+            "Sequence_Scope": "full CDS",
+            "Max_BP_Span": int(job.max_bp_span),
         },
     ]
     for pool_name, seqs in pools.items():
@@ -358,7 +385,10 @@ def _run_one(job: _PrefixJob) -> pd.DataFrame:
                 "Pool": pool_name,
                 "Simulation": i,
                 "MFE_kcal_per_mol": float(dg),
+                "MFE_kcal_per_nt": float(dg) / length if length else float("nan"),
                 "Length_nt": length,
+                "Sequence_Scope": "CDS codon-aligned prefix",
+                "Max_BP_Span": int(job.max_bp_span),
             })
     return pd.DataFrame(rows)
 
@@ -374,6 +404,9 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
         wt_mfe = float(wt_mfe_row.iloc[0])
         wt_dms = float(wt_dms_row.iloc[0]) if not wt_dms_row.empty else float("nan")
         wt_dms_full = float(wt_dms_full_row.iloc[0]) if not wt_dms_full_row.empty else float("nan")
+        chunk_len = int(g[g["Pool"] == "WildType_MFE"]["Length_nt"].iloc[0])
+        full_len_row = g[g["Pool"] == "WildType_DMS_Eval_FullLength"]["Length_nt"]
+        full_len = int(full_len_row.iloc[0]) if not full_len_row.empty else 0
         for pool in ("flat_acgu", "positional_acgu", "synonymous"):
             pool_vals = g[g["Pool"] == pool]["MFE_kcal_per_mol"].values.astype(float)
             if len(pool_vals) == 0:
@@ -382,11 +415,17 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
             sd = float(np.std(pool_vals, ddof=1)) if len(pool_vals) > 1 else 0.0
             n = len(pool_vals)
 
-            def _z_p(observed: float) -> tuple[float, float]:
+            def _z_p(
+                observed: float,
+                vals: np.ndarray = pool_vals,
+                pool_mean: float = mean,
+                pool_sd: float = sd,
+                pool_n: int = n,
+            ) -> tuple[float, float]:
                 if not np.isfinite(observed):
                     return float("nan"), float("nan")
-                z = (observed - mean) / sd if sd > 0 else 0.0
-                p_lower = (1 + int(np.sum(pool_vals <= observed))) / (n + 1)
+                z = (observed - pool_mean) / pool_sd if pool_sd > 0 else 0.0
+                p_lower = (1 + int(np.sum(vals <= observed))) / (pool_n + 1)
                 return float(z), float(p_lower)
 
             z_mfe, p_mfe = _z_p(wt_mfe)
@@ -395,18 +434,29 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
                 "Species": species,
                 "Gene": gene,
                 "Pool": pool,
-                "Length_nt": int(g[g["Pool"] == "WildType_MFE"]["Length_nt"].iloc[0]),
+                "Length_nt": chunk_len,
+                "DMS_Full_CDS_Length_nt": full_len,
                 "WT_MFE": wt_mfe,
+                "WT_MFE_per_nt": wt_mfe / chunk_len if chunk_len else float("nan"),
                 "WT_DMS_Eval": wt_dms,
+                "WT_DMS_Eval_per_nt": wt_dms / chunk_len if chunk_len else float("nan"),
                 "WT_DMS_Eval_FullLength": wt_dms_full,
+                "WT_DMS_Eval_FullLength_per_nt": (
+                    wt_dms_full / full_len if full_len else float("nan")
+                ),
                 "Pool_Mean_MFE": mean,
+                "Pool_Mean_MFE_per_nt": mean / chunk_len if chunk_len else float("nan"),
                 "Pool_SD_MFE": sd,
                 "Z_WT_MFE_vs_Pool": z_mfe,
                 "Empirical_p_WT_MFE_more_stable": p_mfe,
                 "Z_WT_DMS_vs_Pool": z_dms,
                 "Empirical_p_WT_DMS_more_stable": p_dms,
                 "N_Simulations": n,
-                "DMS_dG_Source": "Vienna eval_structure on .db dot-bracket",
+                "DMS_dG_Source": (
+                    "Vienna eval_structure on projected .db CDS dot-bracket; "
+                    "WT_DMS_Eval is the codon-aligned CDS prefix, "
+                    "WT_DMS_Eval_FullLength is the full CDS"
+                ),
             })
     return pd.DataFrame(rows)
 
@@ -457,7 +507,7 @@ def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
                 full_dms_structure=full_struct,
                 n_simulations=int(cfg.substitution_n_simulations),
                 max_bp_span=int(cfg.max_bp_span),
-                seed=rng_seed_base + 1000 * gi + hash(species) % 997,
+                seed=rng_seed_base + 1000 * gi + _stable_species_seed_offset(species),
             ))
 
     if not jobs:

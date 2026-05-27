@@ -95,7 +95,7 @@ def _draw_architecture_clean(ax_arch, n: int, annot: dict | None) -> None:
                                      color=_UTR_COLOR, ec=None))
     ax_arch.axvline(cds_start, color="black", lw=1.0, ls="-", alpha=0.65,
                     zorder=4)
-    ax_arch.axis("off")
+    ax_arch.set_yticks([])
 
 
 def _context_subtitle(annot: dict | None, window: int, span: int,
@@ -275,9 +275,9 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         # Consolidated legend below the figure: track entries + region key
         all_handles, all_labels = [], []
         for axx in (ax_p, ax_dms, ax_delta):
-            h, l = axx.get_legend_handles_labels()
-            all_handles.extend(h)
-            all_labels.extend(l)
+            handles, labels = axx.get_legend_handles_labels()
+            all_handles.extend(handles)
+            all_labels.extend(labels)
         region_handles = _region_legend_handles()
         all_handles.extend(region_handles)
         all_labels.extend([h.get_label() for h in region_handles])
@@ -333,6 +333,6 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
         ax_arch.tick_params(axis="y", left=False, labelleft=False)
         style_axis(ax_arch)
 
-    fig.savefig(out_path, dpi=dpi)
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return Path(out_path)

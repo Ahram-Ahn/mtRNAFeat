@@ -41,9 +41,10 @@ def tis_table(cfg: Config, upstream_nt: int = 50, downstream_nt: int = 50) -> pd
             except KeyError:
                 continue
             l_utr5 = int(annot.get("l_utr5", 0))
+            l_cds = int(annot.get("l_cds", 0))
             tis_pos = l_utr5  # 0-based start of CDS
             up = min(l_utr5, upstream_nt)
-            down = min(len(rec.sequence) - tis_pos, downstream_nt)
+            down = min(l_cds, len(rec.sequence) - tis_pos, downstream_nt)
             start = tis_pos - up
             end = tis_pos + down
             if end - start < 20:

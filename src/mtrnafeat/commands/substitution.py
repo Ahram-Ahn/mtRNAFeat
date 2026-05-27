@@ -1,7 +1,7 @@
 """`mtrnafeat substitution` — synonymous-recoding thermodynamic permutation test.
 
-Promoted from `legacy/base_substitution/03.*`. Five null pools per gene
-(flat-GC, flat-ACGU, positional-GC, positional-ACGU, synonymous)
+Promoted from `legacy/base_substitution/03.*`. Three null pools per gene
+(flat-ACGU, positional-ACGU, synonymous)
 compared against the wild-type ΔG under plain ViennaRNA MFE —
 apples-to-apples vs the wild-type Vienna fold. The ACGU variants
 generalize the GC pools by tracking each nucleotide independently,

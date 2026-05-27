@@ -142,7 +142,8 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
                             label=f"{label} (n={peaks.size})")
 
         # Concordance shading (computed AFTER ylim is finalized for the y0/y1 read)
-        ax.relim(); ax.autoscale_view()
+        ax.relim()
+        ax.autoscale_view()
         _shade_concordance(ax, x, z_mfe, z_div)
 
         # Custom placement: the cotrans bottom panel already carries the
@@ -164,17 +165,6 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
 
     # Title with sample counts
     n_pts = len(gene_df)
-    n_peaks = 0
-    if have_z:
-        n_peaks = sum(
-            int((-arr if sign < 0 else arr).max() >= z_threshold)
-            for arr, sign in (
-                (gene_df["Z_Delta_MFE_per_nt_Smooth"].to_numpy(), -1),
-                (gene_df["Z_Delta_Diversity_Smooth"].to_numpy(), -1),
-                (gene_df["Z_Delta_Paired_Fraction_Smooth"].to_numpy(), 1),
-            )
-            if arr.size
-        )
     fig.suptitle(
         f"{species} {gene} — local structural-change scan "
         f"(mode={mode}, n={n_pts} windows, "

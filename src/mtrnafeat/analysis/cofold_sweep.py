@@ -1,6 +1,6 @@
 """CoFold parameter sweep: which (alpha, tau) makes Vienna MFE track DMS ΔG?
 
-For each (species, gene), we fold the wild-type CDS at every (alpha, tau)
+For each (species, gene), we fold the full parsed transcript at every (alpha, tau)
 combination on the configured sweep grid (`cfg.cofold_alpha_sweep`
 × `cfg.cofold_tau_sweep`). For each combination we compare to:
   - DMS-evaluated ΔG (the energy of the experimental structure under the
@@ -125,7 +125,8 @@ def _gene_window_corr(job: _GeneJob) -> pd.DataFrame:
             mask = np.isfinite(arr) & np.isfinite(dms_arr)
             if mask.sum() >= 3:
                 # Pearson r.
-                a = arr[mask]; b = dms_arr[mask]
+                a = arr[mask]
+                b = dms_arr[mask]
                 if a.std() > 0 and b.std() > 0:
                     r = float(np.corrcoef(a, b)[0, 1])
                 else:
@@ -156,8 +157,11 @@ def _run_one(job: _GeneJob) -> tuple[pd.DataFrame, pd.DataFrame]:
 def run_cofold_sweep(cfg: Config, do_window_corr: bool = True
                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Returns (full_grid_df, window_corr_df)."""
-    step(f"running cofold-sweep ({len(cfg.cofold_alpha_sweep)}×{len(cfg.cofold_tau_sweep)} grid"
-         + ", per-window corr ON" if do_window_corr else ", per-window corr OFF" + ")")
+    corr_label = "ON" if do_window_corr else "OFF"
+    step(
+        f"running cofold-sweep ({len(cfg.cofold_alpha_sweep)}×{len(cfg.cofold_tau_sweep)} grid, "
+        f"per-window corr {corr_label})"
+    )
     jobs: list[_GeneJob] = []
     for species, fname in cfg.db_files.items():
         rec_by_gene = {r.gene: r for r in parse_db(cfg.data_dir / fname)}

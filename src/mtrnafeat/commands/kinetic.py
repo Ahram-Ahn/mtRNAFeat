@@ -21,7 +21,11 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             if a == "--genes" and i + 1 < len(args):
                 genes = args[i + 1].split(",")
                 break
-    summary, traj = kinetic.run_kinetic_for_genes(cfg, genes)
+    try:
+        summary, traj = kinetic.run_kinetic_for_genes(cfg, genes)
+    except RuntimeError as exc:
+        print(f"[mtrnafeat] kinetic unavailable or failed: {exc}")
+        return 2
     canonical_csv(summary, out / "kinetic_summary.csv")
     canonical_csv(traj, out / "kinetic_trajectory.csv")
     for (gene, species), _ in traj.groupby(["Gene", "Species"]):

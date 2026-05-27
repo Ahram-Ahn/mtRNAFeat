@@ -36,9 +36,10 @@ def classify_column(codon_y: str, codon_h: str) -> dict:
 def alignment_table(cfg: Config) -> pd.DataFrame:
     alignment = parse_pal2nal(cfg.data_dir / cfg.alignment_file)
     rows = []
-    for col, (cy, ch, ay, ah) in enumerate(zip(
+    for col, (cy, ch, _ay, _ah) in enumerate(zip(
         alignment.yeast_codons, alignment.human_codons,
         alignment.yeast_aa, alignment.human_aa,
+        strict=True,
     ), start=1):
         rows.append({"col": col, **classify_column(cy, ch)})
     return pd.DataFrame(rows)
@@ -46,12 +47,12 @@ def alignment_table(cfg: Config) -> pd.DataFrame:
 
 def substitution_summary(table: pd.DataFrame) -> pd.DataFrame:
     """Per-position substitution direction tally (e.g. A->C at position 1)."""
-    bases = list("ACGTU")
     rows = []
     for _, r in table.iterrows():
         if r["is_gap"] or r["n_diffs"] == 0:
             continue
-        cy = r["yeast_codon"]; ch = r["human_codon"]
+        cy = r["yeast_codon"]
+        ch = r["human_codon"]
         for pos in [int(p) for p in r["diff_positions"].split(",") if p]:
             rows.append({
                 "Position": pos,
@@ -91,7 +92,7 @@ def _benjamini_hochberg(pvals: list[float]) -> list[float]:
 
 def directional_flux_table(cfg: Config) -> pd.DataFrame:
     """For each codon position (1, 2, 3) and each ordered (from, to) pair of
-    nucleotides (A↔T excluded as redundant), count yeast→human substitutions.
+    nucleotides, count yeast→human substitutions.
 
     Returns one row per (Position, From, To) with Count, expected (under
     matched-base background), binomial p-value, and Benjamini-Hochberg q.
@@ -130,7 +131,8 @@ def directional_flux_table(cfg: Config) -> pd.DataFrame:
                 for _, r in table.iterrows():
                     if r["is_gap"] or r["n_diffs"] == 0:
                         continue
-                    cy = r["yeast_codon"]; ch = r["human_codon"]
+                    cy = r["yeast_codon"]
+                    ch = r["human_codon"]
                     if str(pos) not in r["diff_positions"].split(","):
                         continue
                     yb = _normalize(cy[pos - 1])
@@ -177,7 +179,8 @@ def transition_transversion_summary(table: pd.DataFrame) -> pd.DataFrame:
     transitions = {("A", "G"), ("G", "A"), ("C", "T"), ("T", "C")}
     rows = []
     for pos in (1, 2, 3):
-        ti = 0; tv = 0
+        ti = 0
+        tv = 0
         for _, r in table.iterrows():
             if r["is_gap"] or r["n_diffs"] == 0:
                 continue

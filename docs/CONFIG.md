@@ -94,14 +94,14 @@ value for that run only.
 ### `sim_seq_length`
 - **Type**: int · **Default**: `150`
 - **Controls**: length (nt) of each simulated random sequence in the
-  landscape clouds.
-- **Used by**: [`landscape`](STAGES.md#landscape).
+  landscape clouds and feature null simulations.
+- **Used by**: [`landscape`](STAGES.md#landscape), [`features`](STAGES.md#features).
 
 ### `sim_num_sequences`
 - **Type**: int · **Default**: `1500`
 - **Controls**: number of simulated sequences per condition for the
-  landscape scatter clouds.
-- **Used by**: `landscape`. Higher → tighter cloud, slower run.
+  landscape scatter clouds and feature null simulations.
+- **Used by**: `landscape`, `features`. Higher → tighter cloud, slower run.
 
 ### `gradient_steps`
 - **Type**: int · **Default**: `21`
@@ -128,7 +128,7 @@ value for that run only.
 - **Controls**: per-species (A, U, G, C) frequencies for simulated nulls.
   Empty → empirical frequencies are derived from the `.db` files at runtime
   (default; honors actual H-strand enrichment in human).
-- **Used by**: `landscape`.
+- **Used by**: `landscape`, `features`.
 - **When to change**: modeling H-strand-only / L-strand-only composition,
   or comparing against published whole-genome frequencies.
 
@@ -320,16 +320,19 @@ probability` runs RNAplfold and reports a continuous pair probability.
 - **CLI override**: `--top-labels N`.
 
 ### `structure_deviation_null_model`
-- **Type**: str · **Default**: `"none"` · **Values**: `"none"`, `"dinuc"` (planned)
-- **Controls**: optional region-level null model. ``"none"`` (default)
-  emits effect sizes only.
-- **Used by**: `structure-deviation` (Phase 3 / planned).
+- **Type**: str · **Default**: `"none"` · **Values**: `"none"`, `"dinuc"`
+- **Controls**: optional region-level null model. `"none"` (default)
+  emits effect sizes only and leaves `Empirical_P` / `Q_Value` blank.
+  `"dinuc"` runs a dinucleotide-shuffle null distribution of the
+  per-gene max-|deviation| statistic, then applies BH-FDR across called
+  regions.
+- **Used by**: `structure-deviation`.
 
 ### `structure_deviation_n_null`
 - **Type**: int · **Default**: `0`
 - **Controls**: number of null replicates when
-  `structure_deviation_null_model != "none"`.
-- **Used by**: `structure-deviation` (Phase 3 / planned).
+  `structure_deviation_null_model == "dinuc"`.
+- **Used by**: `structure-deviation`.
 
 ### `window_nt`
 - **Type**: int · **Default**: `120`
@@ -463,9 +466,9 @@ plain Vienna unless explicitly invoked otherwise.
 
 ### `substitution_n_simulations`
 - **Type**: int · **Default**: `200`
-- **Controls**: number of synonymous-recoding null variants generated
-  per pool per (species, gene). The stage uses three pools (flat-GC,
-  positional-GC, synonymous), so total folds per gene are
+- **Controls**: number of substitution-thermo null variants generated
+  per pool per (species, gene). The stage uses three pools (`flat_acgu`,
+  `positional_acgu`, `synonymous`), so total folds per gene are
   `3 × substitution_n_simulations + 2` (the `+2` are the two wild-type
   references). Every variant is folded under **plain ViennaRNA MFE**
   with `cfg.max_bp_span` — the wild-type comparison stays apples-to-
@@ -477,7 +480,9 @@ plain Vienna unless explicitly invoked otherwise.
 ### `substitution_max_nt`
 - **Type**: int · **Default**: `300`
 - **Controls**: codon-truncation cap (nt). Sequences longer than this are
-  truncated to the first `substitution_max_nt` nt before recoding.
+  truncated to the first codon-complete `substitution_max_nt` nt of the
+  CDS before recoding. This is why substitution-stage ΔG values are on a
+  300 nt scale by default, not the full-transcript scale.
 - **Used by**: `substitution`. CLI override: `-- --max-nt 600`.
 - **When to change**: COX1 etc. are >1.5 kb; truncating keeps folding
   tractable. Increase if you have CPU budget.

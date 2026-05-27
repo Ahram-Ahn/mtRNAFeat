@@ -12,12 +12,12 @@ import shutil
 import numpy as np
 import pytest
 
+from mtrnafeat.engines import rnastructure
 from mtrnafeat.engines._common import (
     MissingEngineError,
     dms_to_minus999,
     validate_rna_alphabet,
 )
-from mtrnafeat.engines import rnastructure
 
 
 def _has_rnastructure() -> bool:

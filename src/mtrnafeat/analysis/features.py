@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import pandas as pd
 
+from mtrnafeat.analysis.landscape import species_freqs_for_pipeline
 from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
-from mtrnafeat.core.shuffle import random_gc_sequence
+from mtrnafeat.core.shuffle import random_sequence_with_freqs
 from mtrnafeat.core.structure import extract_pairs, parse_element_sizes
 from mtrnafeat.io.annotations import annotation_for, classify_region
 from mtrnafeat.io.db_parser import parse_db
@@ -54,19 +55,48 @@ def features_dms(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(motifs), pd.DataFrame(spans)
 
 
-def features_simulated(cfg: Config, conditions: list[tuple[str, float]] | None = None,
-                        n_per_condition: int = 500, length: int = 300) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Simulate per-species GC-matched controls. Species column is the real species
-    name (Human/Yeast); the Type column ("Sim") is the disambiguator from DMS.
+def features_simulated(
+    cfg: Config,
+    conditions: list[tuple[str, float]] | None = None,
+    n_per_condition: int | None = None,
+    length: int | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Simulate per-species controls for motif and span comparisons.
+
+    By default, use the same configured simulation size as the landscape
+    stage and draw each species from empirical/configured A/U/G/C frequencies.
+    Passing ``conditions`` preserves the older explicit symmetric-GC path for
+    targeted tests or one-off comparisons.
     """
-    if conditions is None:
-        conditions = [("Human", 0.46), ("Yeast", 0.20)]
+    n = int(cfg.sim_num_sequences if n_per_condition is None else n_per_condition)
+    seq_length = int(cfg.sim_seq_length if length is None else length)
     rng = make_rng(cfg.seed + 2)
     motifs, spans = [], []
-    step(f"simulating features for {len(conditions)} conditions × {n_per_condition} sequences")
-    for species, gc in conditions:
-        for k in progress(range(n_per_condition), desc=f"sim {species}", unit="seq"):
-            seq = random_gc_sequence(length, gc, rng)
+    if conditions is None:
+        freq_conditions = list(species_freqs_for_pipeline(cfg).items())
+        step(f"simulating features for {len(freq_conditions)} species × {n} sequences")
+        iterator = (
+            (species, freqs, f"sim {species}")
+            for species, freqs in freq_conditions
+        )
+    else:
+        step(f"simulating features for {len(conditions)} GC conditions × {n} sequences")
+        iterator = (
+            (
+                species,
+                {
+                    "A": (1.0 - gc) / 2.0,
+                    "U": (1.0 - gc) / 2.0,
+                    "G": gc / 2.0,
+                    "C": gc / 2.0,
+                },
+                f"sim {species}",
+            )
+            for species, gc in conditions
+        )
+    for species, freqs, desc in iterator:
+        for k in progress(range(n), desc=desc, unit="seq"):
+            seq = random_sequence_with_freqs(seq_length, freqs, rng)
             struct, _ = thermo.fold_mfe(seq)
             sim_id = f"Sim_{species}_{k}"
             motifs.extend(extract_motifs_from_record(species, "Sim", sim_id, struct, cfg.max_loop_artifact_size))

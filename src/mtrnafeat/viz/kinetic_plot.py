@@ -18,7 +18,7 @@ def plot_kinetic_trajectory(traj_df, gene: str, species: str, out_path: Path,
         ax.text(0.5, 0.5, f"No kinetic trajectory for {species} {gene}.",
                 ha="center", va="center")
         ax.axis("off")
-        fig.savefig(out_path, dpi=dpi)
+        fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
         plt.close(fig)
         return Path(out_path)
     final_L = sub["Transcript_Length"].max()
@@ -38,6 +38,7 @@ def plot_kinetic_trajectory(traj_df, gene: str, species: str, out_path: Path,
     axes[1].set_xlabel("Transcript length (nt)", fontsize=LABEL_FONTSIZE)
     for a in axes:
         style_axis(a)
-    fig.savefig(out_path, dpi=dpi)
+    fig.tight_layout(rect=[0, 0, 0.84, 1.0])
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return Path(out_path)

@@ -199,7 +199,9 @@ def repel_labels(ax, xs: Iterable[float], ys: Iterable[float], labels: Iterable[
     """
     import matplotlib.patheffects as path_effects
 
-    xs = list(xs); ys = list(ys); labels = list(labels)
+    xs = list(xs)
+    ys = list(ys)
+    labels = list(labels)
     if not xs:
         return
 
@@ -210,9 +212,9 @@ def repel_labels(ax, xs: Iterable[float], ys: Iterable[float], labels: Iterable[
         try:
             from adjustText import adjust_text  # type: ignore
             text_objs = []
-            for x, y, lbl in zip(xs, ys, labels):
+            for x, y, lbl in zip(xs, ys, labels, strict=True):
                 t = ax.text(x, y, lbl, fontsize=fontsize, color=color, fontweight="bold",
-                             ha="center", va="center", zorder=12)
+                             ha="center", va="center", zorder=12, clip_on=False)
                 if halo_effects is not None:
                     t.set_path_effects(halo_effects)
                 text_objs.append(t)
@@ -227,17 +229,27 @@ def repel_labels(ax, xs: Iterable[float], ys: Iterable[float], labels: Iterable[
     fig.canvas.draw()
     inv = ax.transData.inverted()
 
-    pts = ax.transData.transform(list(zip(xs, ys)))
-    label_pts = [tuple(p) for p in pts]
-    radii = []
+    pts = ax.transData.transform(list(zip(xs, ys, strict=True)))
+    fig.canvas.draw()
+    ax_bb = ax.get_window_extent(renderer=fig.canvas.get_renderer())
+    label_pts = []
+    widths = []
+    heights = []
     text_objs = []
-    for (x, y), lbl in zip(label_pts, labels):
+    n_labels = len(labels)
+    for idx, ((x, y), lbl) in enumerate(zip(pts, labels, strict=True)):
         t = ax.text(0, 0, lbl, fontsize=fontsize, color=color, fontweight="bold",
-                     ha="center", va="center", zorder=12)
+                     ha="center", va="center", zorder=12, clip_on=False)
         if halo_effects is not None:
             t.set_path_effects(halo_effects)
         bb = t.get_window_extent(renderer=fig.canvas.get_renderer())
-        radii.append(0.5 * math.hypot(bb.width, bb.height) + 4.0)
+        widths.append(bb.width + k)
+        heights.append(bb.height + max(8.0, k * 0.45))
+        # Start labels off their exact anchor so dense point clusters have a
+        # direction to relax toward rather than stacking on top of each other.
+        angle = (2.0 * math.pi * idx / max(1, n_labels)) + (math.pi / 7.0)
+        radius = 13.0 + 5.0 * (idx % 3)
+        label_pts.append((x + radius * math.cos(angle), y + radius * math.sin(angle)))
         text_objs.append(t)
 
     moved = list(label_pts)
@@ -245,31 +257,42 @@ def repel_labels(ax, xs: Iterable[float], ys: Iterable[float], labels: Iterable[
         any_overlap = False
         for i in range(len(moved)):
             xi, yi = moved[i]
-            ri = radii[i]
             fx = fy = 0.0
             for j in range(len(moved)):
                 if i == j:
                     continue
                 dx = xi - moved[j][0]
                 dy = yi - moved[j][1]
-                dist = math.hypot(dx, dy) or 1e-3
-                min_d = ri + radii[j]
-                if dist < min_d:
+                overlap_x = (widths[i] + widths[j]) / 2.0 - abs(dx)
+                overlap_y = (heights[i] + heights[j]) / 2.0 - abs(dy)
+                if overlap_x > 0 and overlap_y > 0:
                     any_overlap = True
-                    push = (min_d - dist) / dist
-                    fx += dx * push * 0.5
-                    fy += dy * push * 0.5
+                    sx = 1.0 if dx >= 0 else -1.0
+                    sy = 1.0 if dy >= 0 else -1.0
+                    if overlap_x < overlap_y:
+                        fx += sx * overlap_x * 0.55
+                        fy += sy * overlap_y * 0.10
+                    else:
+                        fy += sy * overlap_y * 0.55
+                        fx += sx * overlap_x * 0.10
             ax_dx = xi - pts[i][0]
             ax_dy = yi - pts[i][1]
             d_anchor = math.hypot(ax_dx, ax_dy) or 1e-3
-            anchor_pull = max(0.0, d_anchor - 18.0) / 140.0  # gentler pull
+            anchor_pull = max(0.0, d_anchor - 26.0) / 220.0
             fx -= ax_dx * anchor_pull
             fy -= ax_dy * anchor_pull
-            moved[i] = (xi + fx, yi + fy)
+            nx = xi + fx
+            ny = yi + fy
+            half_w = widths[i] / 2.0
+            half_h = heights[i] / 2.0
+            bounds_pad = 58.0
+            nx = min(max(nx, ax_bb.x0 - bounds_pad + half_w), ax_bb.x1 + bounds_pad - half_w)
+            ny = min(max(ny, ax_bb.y0 - bounds_pad + half_h), ax_bb.y1 + bounds_pad - half_h)
+            moved[i] = (nx, ny)
         if not any_overlap:
             break
 
-    for (lx, ly), (px, py), t in zip(moved, pts, text_objs):
+    for (lx, ly), (px, py), t in zip(moved, pts, text_objs, strict=True):
         data_xy = inv.transform((lx, ly))
         t.set_position((data_xy[0], data_xy[1]))
         if math.hypot(lx - px, ly - py) > 6.0:

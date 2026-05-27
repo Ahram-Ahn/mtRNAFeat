@@ -22,7 +22,6 @@ For each transcript:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -39,7 +38,7 @@ from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core.structure import extract_pairs, pair_table
 from mtrnafeat.io.annotations import annotation_for
-from mtrnafeat.io.db_parser import DbRecord, parse_db
+from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 
 
@@ -332,6 +331,8 @@ def _circular_shift_p_low(track: np.ndarray, lo: int, hi: int,
     observed = float(np.nanmean(track[lo:hi]))
     if not np.isfinite(observed):
         return float("nan")
+    if n < 2:
+        return 1.0
     shifts = rng.integers(low=1, high=n, size=int(n_shifts))
     le = 0
     for k in shifts:

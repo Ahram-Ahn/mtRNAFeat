@@ -78,8 +78,8 @@ class Config:
     )
 
     # ─────────── structure-deviation stage ───────────
-    # Region-discovery pass that compares RNAplfold local pairing
-    # probability (sequence-only thermodynamic prior) to the DMS-derived
+    # Region-discovery pass that compares the global Vienna MFE paired
+    # binary track (sequence-only thermodynamic model) to the DMS-derived
     # paired fraction (experimental measurement) and calls regions where
     # the two diverge. Replaces the role of the old significance scan
     # with a biologically interpretable, region-centered output.

@@ -26,7 +26,6 @@ from mtrnafeat.analysis.deviation import (
     per_position_table,
 )
 
-
 # ──────────────────── parser / building blocks ────────────────────
 
 
@@ -202,7 +201,7 @@ def test_bin_intervals_partitions_short_transcripts_safely():
 
     annot = {"l_tr": n, "l_utr5": 0, "l_cds": 90, "l_utr3": 10}
     bins = _bin_intervals(annot, n, cfg=_Cfg())
-    for name, (lo, hi) in bins.items():
+    for _name, (lo, hi) in bins.items():
         assert lo >= 0
         assert hi <= n
         assert hi >= 0  # may equal lo (empty bin), but never negative width

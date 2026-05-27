@@ -129,24 +129,23 @@ unusually long 5′UTRs (e.g. yeast COX1).
 ## structure-deviation
 
 ### `structure_deviation/structure_deviation_{species}_{gene}.svg`
-Four-panel per-gene plot showing where the local thermodynamic prior
+Four-panel per-gene plot showing where the global Vienna MFE model
 disagrees with the DMS-derived structure.
 
-- **Panel 1 (RNAplfold P(paired) + DMS paired fraction):** smoothed
-  tracks for both, allowing visual concordance check.
-- **Panel 2 (Δ track):** signed deviation `P_model − P_DMS` at the
-  same per-window scale used by `local-probability` (so the two figures
-  tell visually identical stories). Horizontal band at
+- **Panel 1 (global-MFE paired fraction):** smoothed paired-binary
+  track from the whole-transcript Vienna MFE structure.
+- **Panel 2 (DMS paired fraction):** smoothed paired-binary track from
+  the DMS dot-bracket.
+- **Panel 3 (Δ track):** signed deviation `P_model − P_DMS` at the
+  same per-window scale used by the plot/table aggregation. Horizontal band at
   ±`structure_deviation_threshold` (default ±0.25).
-- **Panel 3 (called regions):** per-region rectangles colored by
+- **Panel 4 (called regions + architecture):** per-region rectangles colored by
   `Region_Class` (`model_high_dms_low` = magenta open-but-foldable;
   `model_low_dms_high` = teal protected-beyond-model;
   `concordant_paired` / `concordant_open` = neutral; `mixed_deviation`,
-  `ambiguous` = gray). The top-N regions by |Δ| are labeled with
-  `Region_ID`.
-- **Panel 4 (architecture + TIS):** as in `local-probability`.
-- **CSVs:** `structure_deviation_per_position.csv` (panels 1–2),
-  `structure_deviation_regions.csv` (panel 3).
+  `ambiguous` = gray), overlaid on the transcript architecture strip.
+- **CSVs:** `structure_deviation_per_position.csv` (panels 1–3),
+  `structure_deviation_regions.csv` (panel 4).
 
 ### `structure_deviation/structure_deviation_lollipop_{species}.svg`
 Per-species summary of every called region.
@@ -209,8 +208,7 @@ Per-species KDE panels of ΔG distributions for each null pool.
 
 - **x-axis:** ΔG (kcal/mol).
 - **y-axis:** kernel density.
-- **Lines:** five null pools (flat-GC, flat-ACGU, positional-GC,
-  positional-ACGU, synonymous).
+- **Lines:** three null pools (flat-ACGU, positional-ACGU, synonymous).
 - **Vertical line:** wild-type observed ΔG.
 - **Faceted by gene:** one panel per gene.
 - **CSV:** `substitution/substitution_thermo_distribution.csv`.
@@ -226,23 +224,35 @@ Z-score heatmap of (gene × null pool).
 
 ## cofold
 
-### `cofold/cofold_gap_strip_{species}.svg`
-|Gap| strip plot of CoFold (α, τ) sweep.
+### `cofold/cofold_gap_closure.svg`
+Gap-closure summary for the CoFold (α, τ) sweep.
 
-- **x-axis:** τ (decay constant, nt).
-- **y-axis:** |ΔG_cofold − ΔG_DMS| (kcal/mol).
-- **Color:** α (penalty strength, kcal/mol).
-- **Faceted by gene.**
+- **x-axis:** gene.
+- **y-axis:** |ΔG − ΔG_DMS| (kcal/mol), comparing plain Vienna (`α=0`)
+  with the best CoFold sweep cell.
+- **Faceted by species.**
 - **CSV:** `cofold/cofold_grid.csv`; per-gene best in
   `cofold/cofold_best_per_gene.csv`.
 
-### `cofold/cofold_per_window_corr_{species}.svg`
-Per-window CoFold-vs-DMS correlation curves.
+### `cofold/cofold_parameter_landscape.svg`
+Species-level α/τ heatmap of the CoFold sweep.
 
-- **x-axis:** window center (nt).
-- **y-axis:** Spearman correlation between CoFold-evaluated paired
-  fraction and DMS paired fraction over the window.
-- **CSV:** `cofold/cofold_per_window_corr.csv`.
+- **x-axis:** τ (decay constant, nt).
+- **y-axis:** α (penalty strength, kcal/mol).
+- **Color:** median |ΔG_cofold − ΔG_DMS| (kcal/mol), aggregated over genes.
+- **CSV:** `cofold/cofold_grid.csv`.
+
+### `cofold/cofold_parameter_landscape_{species}.svg`
+Per-gene α/τ heatmaps of the CoFold sweep.
+
+- **x-axis:** τ (decay constant, nt).
+- **y-axis:** α (penalty strength, kcal/mol).
+- **Color:** |ΔG_cofold − ΔG_DMS| (kcal/mol).
+- **CSV:** `cofold/cofold_grid.csv`.
+
+`cofold/cofold_per_window_corr.csv` is a CSV-only diagnostic containing
+per-window Pearson correlations; no per-window cofold figure is currently
+emitted.
 
 ---
 
@@ -288,5 +298,5 @@ DrTransformer co-transcriptional folding trajectory plot.
 - **Lines:** per-macrostate occupancy over time.
 - **CSV:** `kinetic/kinetic_summary.csv`.
 
-This stage requires DrTransformer on `PATH` and is never auto-run by
-`run-all`.
+This stage requires a working DrTransformer runtime and is never auto-run
+by `run-all`.

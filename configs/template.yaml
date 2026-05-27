@@ -39,11 +39,12 @@ alignment_file: PAL2NL_aa-dna_alignment_yeast_human.txt
 # Override on the CLI with `--seed N`.
 seed: 42
 
-# ────────────── Simulation (landscape / significance) ──────────────
+# ───────── Simulation (landscape / features / significance) ─────────
 # Length of each simulated random sequence (nt).
 sim_seq_length: 150
 
-# Number of simulated sequences per condition for the landscape clouds.
+# Number of simulated sequences per condition/species for landscape clouds
+# and feature nulls.
 sim_num_sequences: 1500
 
 # Number of GC% steps in the gradient curve (e.g. 21 → 0%, 5%, ..., 100%).
@@ -60,7 +61,7 @@ sim_gc_conditions:
   "Sim Yeast 5' UTR (7% GC)": 0.07
 
 # Per-species (A, U, G, C) frequencies used to seed simulated nulls in
-# `analysis.landscape`. Empty {} → empirical frequencies are computed
+# landscape and features. Empty {} → empirical frequencies are computed
 # from the .db files at runtime (default; honors actual H-strand
 # enrichment for human). Override to model e.g. H-strand-only or
 # L-strand-only composition:
@@ -138,8 +139,8 @@ tis_window_sweep_pairs:
   - [500, 500]
 
 # ─────────────────── structure-deviation ───────────────────
-# Region-discovery pass. Calls intervals where RNAplfold local pairing
-# probability and the DMS-derived paired fraction diverge by at least
+# Region-discovery pass. Calls intervals where the global Vienna MFE paired
+# binary track and the DMS-derived paired fraction diverge by at least
 # `structure_deviation_threshold` (smoothed track), classifies each
 # region into one of {model_high_dms_low, model_low_dms_high,
 # concordant_paired, concordant_open, mixed_deviation, ambiguous}, and
@@ -158,8 +159,8 @@ structure_deviation_early_cds_nt: 300
 structure_deviation_top_labels: 5
 # Optional region-level null. "none" (default) emits effect sizes only.
 # "dinuc" runs a per-gene dinucleotide-shuffle null and max-statistic
-# correction across called regions; only run when an explicit
-# `--n-null N` is provided on the CLI.
+# correction across called regions; set structure_deviation_n_null > 0
+# in this file or pass `--n-null N` on the CLI.
 structure_deviation_null_model: none
 structure_deviation_n_null: 0
 
@@ -215,7 +216,7 @@ max_heatmap_size: 15
 
 # ─────────────── Substitution-thermo permutation ───────────────
 # Number of synonymous-recoding null variants generated per pool per
-# (species, gene). Three pools are run (flat-GC, positional-GC,
+# (species, gene). Three pools are run (flat-ACGU, positional-ACGU,
 # synonymous), so the total fold count per gene is
 # 3 * substitution_n_simulations + 2 (the +2 are the two wild-type
 # references). Every variant is folded with PLAIN ViennaRNA MFE under
@@ -224,8 +225,9 @@ max_heatmap_size: 15
 substitution_n_simulations: 200
 
 # Codon-truncation cap for substitution permutation (nt). Sequences
-# longer than this are truncated to the first substitution_max_nt nt
-# before recoding to keep folding tractable.
+# longer than this are truncated to the first codon-complete
+# substitution_max_nt nt of the CDS before recoding to keep folding
+# tractable. Default substitution ΔGs are therefore 300 nt chunk energies.
 substitution_max_nt: 300
 
 # ──────────────────────────── Plot ────────────────────────────

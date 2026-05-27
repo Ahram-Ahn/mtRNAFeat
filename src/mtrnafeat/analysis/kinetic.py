@@ -104,7 +104,7 @@ def end_state_population(traj: pd.DataFrame) -> list[tuple[float, str]]:
         return []
     L = traj["Transcript_Length"].max()
     final = traj[traj["Transcript_Length"] == L].sort_values("Occupancy", ascending=False)
-    return [(float(o), s) for o, s in zip(final["Occupancy"], final["Structure"])]
+    return [(float(o), s) for o, s in zip(final["Occupancy"], final["Structure"], strict=True)]
 
 
 def compare_kinetic_to_dms(end_pop: list[tuple[float, str]], dms_struct: str, mfe_struct: str) -> dict:

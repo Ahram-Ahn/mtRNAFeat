@@ -44,7 +44,7 @@ def gene_zscore(seq: str, n_shuffles: int, rng: np.random.Generator,
     }
 
 
-def _records_for_targets(cfg: Config) -> list[tuple[str, "object"]]:
+def _records_for_targets(cfg: Config) -> list[tuple[str, object]]:
     """Yield (species, DbRecord) for every record whose canonical gene name
     is in ``cfg.target_genes``. If ``target_genes`` is empty/None, fall back
     to every record in every .db file."""

@@ -21,6 +21,7 @@ from mtrnafeat.viz.style import (
     LINEWIDTH,
     TITLE_FONTSIZE,
     apply_theme,
+    legend_outside,
     panel_label,
     repel_labels,
     style_axis,
@@ -39,7 +40,7 @@ def landscape_overlay(sim_df, exp_df, out_path: Path, dpi: int = 300) -> Path:
     apply_theme()
     species_list = ["Human", "Yeast"]
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
-    for ax, letter in zip(axes, ("A", "B")):
+    for ax, letter in zip(axes, ("A", "B"), strict=True):
         panel_label(ax, letter)
 
     species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
@@ -49,7 +50,7 @@ def landscape_overlay(sim_df, exp_df, out_path: Path, dpi: int = 300) -> Path:
     empirical_fill = "#3B7FB7"          # saturated blue
     ref_fill_palette = ["#E68A2E", "#7E57C2", "#3CA46B"]  # orange / purple / green
 
-    for ax, species in zip(axes, species_list):
+    for ax, species in zip(axes, species_list, strict=True):
         sp_mask = sim_df["Condition"].str.startswith(f"Sim {species}")
         sp_sim = sim_df[sp_mask]
         conditions = list(sp_sim["Condition"].unique())
@@ -92,11 +93,12 @@ def landscape_overlay(sim_df, exp_df, out_path: Path, dpi: int = 300) -> Path:
             sns.scatterplot(data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
                             ax=ax, color=species_palette[species],
                             s=140, edgecolor="black", linewidth=1.4, zorder=5)
+            ax.margins(x=0.16, y=0.28)
             repel_labels(ax,
                          xs=sub["Normalized_MFE_per_nt"].values,
                          ys=sub["Foldedness_Pct"].values,
                          labels=sub["Gene"].values,
-                         color=species_palette[species], fontsize=11)
+                         color=species_palette[species], fontsize=8, k=42)
             panel_handles.append(Line2D([0], [0], marker="o", color="w",
                                         markerfacecolor=species_palette[species],
                                         markersize=11, markeredgecolor="black"))
@@ -108,11 +110,11 @@ def landscape_overlay(sim_df, exp_df, out_path: Path, dpi: int = 300) -> Path:
             ax.set_ylabel("Structured percentage (%)", fontsize=LABEL_FONTSIZE)
         else:
             ax.set_ylabel("")
-        ax.margins(x=0.10, y=0.12)
+        ax.margins(x=0.16, y=0.28)
         style_axis(ax)
-        ax.legend(panel_handles, panel_labels, loc="upper right",
-                  frameon=True, framealpha=0.92, fontsize=9,
-                  borderaxespad=0.6)
+        legend_outside(ax, handles=panel_handles, labels=panel_labels,
+                       position="bottom", frameon=True, framealpha=0.92,
+                       fontsize=8, ncol=1)
 
     fig.suptitle("In vivo mt-mRNA structures vs. simulated thermodynamic null",
                  fontsize=TITLE_FONTSIZE + 1, y=1.02)
@@ -218,11 +220,12 @@ def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
         sns.scatterplot(data=exp_sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
                         ax=ax, color=color, s=140, edgecolor="black",
                         linewidth=1.4, zorder=5)
+        ax.margins(x=0.16, y=0.28)
         repel_labels(ax,
                      xs=exp_sub["Normalized_MFE_per_nt"].values,
                      ys=exp_sub["Foldedness_Pct"].values,
                      labels=exp_sub["Gene"].values,
-                     color=color, fontsize=11)
+                     color=color, fontsize=8, k=42)
         legend_handles.append(Line2D([0], [0], marker="o", color="w",
                                       markerfacecolor=color, markersize=11,
                                       markeredgecolor="black",
@@ -235,8 +238,8 @@ def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
     ax.set_ylabel("Structured percentage (%)", fontsize=LABEL_FONTSIZE)
     ax.margins(x=0.10, y=0.12)
     style_axis(ax)
-    ax.legend(handles=legend_handles, labels=legend_labels,
-              loc="best", fontsize=10, frameon=True, framealpha=0.9)
+    legend_outside(ax, handles=legend_handles, labels=legend_labels,
+                   position="right", fontsize=9, frameon=True, framealpha=0.9)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
@@ -276,7 +279,7 @@ def per_base_composition_bias(biased_gradient_df, exp_df, out_path: Path,
     fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True)
     axes = axes.flatten()
 
-    for ax, base in zip(axes, ["A", "C", "G", "U"]):
+    for ax, base in zip(axes, ["A", "C", "G", "U"], strict=True):
         y_col = f"Pct_{base}"
         line_color = _BASE_BIAS_COLORS[base]
 
@@ -293,12 +296,13 @@ def per_base_composition_bias(biased_gradient_df, exp_df, out_path: Path,
                 color=exp_color, s=110, edgecolor="black", linewidth=1.2,
                 zorder=5,
             )
+            ax.margins(x=0.06, y=0.18)
             repel_labels(
                 ax,
                 xs=exp_sub["Sequence_GC_Pct"].values,
                 ys=exp_sub[y_col].values,
                 labels=exp_sub["Gene"].values,
-                color=exp_color, fontsize=9,
+                color=exp_color, fontsize=8, k=30,
             )
 
         ax.set_title(f"{_BASE_LABEL[base]} composition",
@@ -307,7 +311,7 @@ def per_base_composition_bias(biased_gradient_df, exp_df, out_path: Path,
         ax.set_ylabel(f"{_BASE_LABEL[base]} content (%)", fontsize=LABEL_FONTSIZE)
         ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.45)
         ax.set_axisbelow(True)
-        ax.margins(x=0.04, y=0.10)
+        ax.margins(x=0.06, y=0.18)
         style_axis(ax)
         leg = ax.get_legend()
         if leg is not None:
@@ -393,7 +397,7 @@ def paired_nt_fractions(symmetric_gradient_df, biased_gradient_df, exp_df,
         ("Paired_AU_nt_Pct", "A-U paired nt (% of sequence)", "C. A-U paired nucleotides"),
     ]
 
-    for ax, (y_col, ylabel, title) in zip(axes, panel_defs):
+    for ax, (y_col, ylabel, title) in zip(axes, panel_defs, strict=True):
         sns.lineplot(
             data=sym_df, x="Sequence_GC_Pct", y=y_col, ax=ax,
             color="#b0b0b0", linestyle="--", errorbar=None,

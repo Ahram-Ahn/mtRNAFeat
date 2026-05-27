@@ -104,7 +104,7 @@ def plot_transcript_pairing(res, pos_df: pd.DataFrame, out_path: Path,
     ax.set_axisbelow(True)
     # Put the legend OUTSIDE the data axis (figure top-right). bbox is in
     # figure coords because we constrained gs.right to 0.78.
-    leg = fig.legend(
+    fig.legend(
         loc="upper left", bbox_to_anchor=(0.79, 0.88),
         frameon=False,
         fontsize=LEGEND_FONTSIZE, borderpad=0.7, handlelength=2.4,

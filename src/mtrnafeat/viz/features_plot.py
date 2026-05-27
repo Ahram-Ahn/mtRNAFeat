@@ -37,7 +37,7 @@ def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, 
         axes = [axes]
 
     motif_display = [m.replace("_", " ") for m in motifs]
-    for ax, species in zip(axes, species_list):
+    for ax, species in zip(axes, species_list, strict=True):
         sub = counts[counts["Species"] == species].copy()
         if sub.empty:
             ax.set_visible(False)
@@ -107,7 +107,7 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
         })
     df_scatter = pd.DataFrame(transcripts)
     species_list = ["Human", "Yeast"]
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6.5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(16.5, 7.0), sharex=True, sharey=True)
 
     if not df_scatter.empty:
         xs_all = df_scatter["Avg_Macro_Stem"].values
@@ -119,7 +119,7 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     else:
         x_lim, y_lim = (0, 10), (0, 10)
 
-    for ax, sp in zip(axes, species_list):
+    for ax, sp in zip(axes, species_list, strict=True):
         sim_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "Sim")]
         exp_sub = df_scatter[(df_scatter["Species"] == sp) & (df_scatter["Type"] == "DMS")]
         # Per-species sim-cloud cmap — muted sequential palettes that don't
@@ -143,12 +143,13 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
         color = PALETTE.get(sp, "red")
         if not exp_sub.empty:
             sns.scatterplot(data=exp_sub, x="Avg_Macro_Stem", y="Avg_Total_Loop",
-                            ax=ax, color=color, s=160, edgecolor="black", linewidth=1.4, zorder=5,
+                            ax=ax, color=color, s=130, edgecolor="black", linewidth=1.3, zorder=5,
                             label="In Organello DMS Transcripts")
+            ax.margins(x=0.14, y=0.16)
             from mtrnafeat.viz.style import repel_labels
             repel_labels(ax,
                           exp_sub["Avg_Macro_Stem"].values, exp_sub["Avg_Total_Loop"].values,
-                          exp_sub["Gene"].values, color="black", fontsize=11,
+                          exp_sub["Gene"].values, color="black", fontsize=9, k=32,
                           use_adjusttext=True)
         if sim_drawn:
             from matplotlib.patches import Patch
@@ -162,7 +163,7 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
             legend_outside(ax, position="bottom", fontsize=11, frameon=False, ncol=2)
         ax.set_xlim(*x_lim)
         ax.set_ylim(*y_lim)
-        ax.margins(x=0.10, y=0.12)
+        ax.margins(x=0.14, y=0.16)
         ax.set_title(f"{sp} RNA Stem and Loop Sizes\n(Simulated vs. In Organello DMS)",
                      fontsize=TITLE_FONTSIZE, pad=12)
         ax.set_xlabel("Average Helix Size (nt)", fontsize=LABEL_FONTSIZE)
@@ -208,7 +209,7 @@ def span_boxplot(df_spans: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
 
     x_max = float(df["Span"].max())
 
-    for ax, sp in zip(axes, species_order):
+    for ax, sp in zip(axes, species_order, strict=True):
         sp_df = df[df["Species"] == sp]
         base_color = species_color.get(sp, "#444444")
         for src in ("Sim", "DMS"):

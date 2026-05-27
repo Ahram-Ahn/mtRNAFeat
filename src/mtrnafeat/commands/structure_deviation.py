@@ -51,7 +51,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from mtrnafeat.analysis import deviation, local_probability as lp_analysis
+from mtrnafeat.analysis import deviation
+from mtrnafeat.analysis import local_probability as lp_analysis
 from mtrnafeat.config import Config
 from mtrnafeat.constants import file_safe_gene
 from mtrnafeat.io.annotations import annotation_for

@@ -37,9 +37,8 @@ from mtrnafeat.viz.style import (
     style_axis,
 )
 
-
 CLASS_COLORS = {
-    "model_high_dms_low": "#1F77B4",   # blue (RNAplfold-rich)
+    "model_high_dms_low": "#1F77B4",   # blue (MFE-rich)
     "model_low_dms_high": "#2CA02C",   # green (DMS-rich)
     "concordant_paired": "#444444",
     "concordant_open": "#BFBFBF",
@@ -47,7 +46,7 @@ CLASS_COLORS = {
     "ambiguous": "#E0E0E0",
 }
 
-_RNAPLFOLD_COLOR = "#1F77B4"   # blue
+_MODEL_COLOR = "#1F77B4"   # blue
 _DMS_TRACK_COLOR = "#2CA02C"   # green
 _UTR_COLOR = "#BDBDBD"
 _CDS_COLOR = "#4DAF4A"
@@ -119,7 +118,7 @@ def plot_one_gene(result: DeviationResult,
     except KeyError:
         annot = None
 
-    rnap_color = _RNAPLFOLD_COLOR
+    rnap_color = _MODEL_COLOR
     dms_color = _DMS_TRACK_COLOR
 
     fig = plt.figure(figsize=(13.5, 8.4))

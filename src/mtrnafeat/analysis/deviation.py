@@ -48,7 +48,7 @@ from mtrnafeat.core.shuffle import dinuc_shuffle
 from mtrnafeat.core.stats import bh_fdr
 from mtrnafeat.core.structure import extract_pairs
 from mtrnafeat.io.annotations import annotation_for
-from mtrnafeat.io.db_parser import DbRecord, parse_db
+from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 from mtrnafeat.rng import make_rng
 
@@ -207,7 +207,7 @@ def _runs(mask: np.ndarray) -> list[tuple[int, int]]:
     edges = np.diff(np.concatenate(([0], mask.astype(int), [0])))
     starts = np.where(edges == 1)[0]
     ends = np.where(edges == -1)[0]
-    return list(zip(starts.tolist(), ends.tolist()))
+    return list(zip(starts.tolist(), ends.tolist(), strict=True))
 
 
 def _merge_runs(runs: list[tuple[int, int]], gap: int) -> list[tuple[int, int]]:

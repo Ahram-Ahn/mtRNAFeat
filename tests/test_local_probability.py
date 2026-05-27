@@ -216,3 +216,10 @@ def test_circular_shift_p_low_constant_track_is_one():
     rng = np.random.default_rng(3)
     p = lp._circular_shift_p_low(track, lo=10, hi=20, n_shifts=50, rng=rng)
     assert p == pytest.approx(1.0)
+
+
+def test_circular_shift_p_low_single_position_track_is_one():
+    track = np.array([0.25])
+    rng = np.random.default_rng(3)
+    p = lp._circular_shift_p_low(track, lo=0, hi=1, n_shifts=50, rng=rng)
+    assert p == pytest.approx(1.0)

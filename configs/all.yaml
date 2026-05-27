@@ -9,7 +9,7 @@
 #   mtrnafeat run-all --parallel --config configs/all.yaml --outdir runs/all
 seed: 42
 data_dir: data
-outdir: runs/all
+outdir: runs/26_05_27_run
 
 target_genes:
   # Shared by both species
@@ -32,11 +32,11 @@ target_genes:
 
 n_workers: 4
 
-sim_seq_length: 150
+sim_seq_length: 300
 sim_num_sequences: 1500
 gradient_steps: 21
-gradient_seqs_per_step: 200
-n_shuffles: 200
+gradient_seqs_per_step: 1500
+n_shuffles: 300
 
 window_nt: 50
 step_nt: 10
@@ -49,7 +49,7 @@ cofold_tau: 640.0
 # `mtrnafeat window ... -- --engine vienna`.
 fold_engine: rnastructure
 
-substitution_n_simulations: 200
+substitution_n_simulations: 1000
 substitution_max_nt: 300
 
 max_loop_artifact_size: 50

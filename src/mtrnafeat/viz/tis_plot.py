@@ -45,7 +45,7 @@ def _bar_with_zero_handling(ax, xs, values, width, color, label, full_ctx):
     safe_vals = np.where(np.isnan(values), 0.0, values)
     bars = ax.bar(xs, safe_vals, width=width, color=color, label=label,
                    edgecolor="#333333", linewidth=0.7, zorder=3)
-    for bar, raw, _full in zip(bars, values, full_ctx):
+    for bar, raw, _full in zip(bars, values, full_ctx, strict=True):
         if np.isnan(raw):
             bar.set_visible(False)
             ax.annotate("n/a", xy=(bar.get_x() + bar.get_width() / 2, 0),
@@ -88,7 +88,7 @@ def _draw_one(ax, sub: pd.DataFrame, species: str) -> None:
     # drawn diagonally so multi-character mt gene names (ATP8_ATP6,
     # ND4L_ND4) have room and stay legible at journal print size.
     gene_labels = [f"{g}*" if not full else str(g)
-                   for g, full in zip(sub["Gene"], full_ctx)]
+                   for g, full in zip(sub["Gene"], full_ctx, strict=True)]
     ax.set_xticks(list(ind))
     ax.set_xticklabels(gene_labels, rotation=45, ha="right",
                         fontsize=LABEL_FONTSIZE + 2, fontweight="bold")
@@ -126,7 +126,7 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     fig, axes = plt.subplots(1, n, figsize=(7.4 * n, 6.4), sharey=True)
     if n == 1:
         axes = [axes]
-    for ax, sp in zip(axes, species_present):
+    for ax, sp in zip(axes, species_present, strict=True):
         _draw_one(ax, df[df["Species"] == sp].sort_values("Gene"), sp)
 
     handles = [

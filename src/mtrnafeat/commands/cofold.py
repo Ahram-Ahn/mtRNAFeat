@@ -1,6 +1,6 @@
 """`mtrnafeat cofold` — CoFold parameter sweep against DMS ΔG.
 
-For each (species, gene), folds the wild-type CDS at every (alpha, tau)
+For each (species, gene), folds the full parsed transcript at every (alpha, tau)
 combo on the configured grid (cfg.cofold_alpha_sweep × cfg.cofold_tau_sweep)
 and reports how close each combo gets to the DMS-evaluated ΔG. Also runs
 a per-window CoFold-vs-DMS correlation analysis (CSV only — no figure;
