@@ -24,16 +24,16 @@ def plot_path(out_dir, basename: str, fmt: str = "png") -> Path:
     return Path(out_dir) / f"{basename}.{ext}"
 
 
-SPINE_WIDTH = 1.2
-TICK_WIDTH = 1.1
-TICK_LENGTH = 4.5
+SPINE_WIDTH = 1.25
+TICK_WIDTH = 1.15
+TICK_LENGTH = 5.0
 # Publication body-text spec (Nature/Cell): 7-9pt sans-serif. Titles slightly
 # larger but still ≤12pt so multi-panel figures composited at journal width
 # remain readable without rescaling.
-TITLE_FONTSIZE = 11
-LABEL_FONTSIZE = 9
-TICK_FONTSIZE = 8
-LEGEND_FONTSIZE = 8
+TITLE_FONTSIZE = 12
+LABEL_FONTSIZE = 10
+TICK_FONTSIZE = 9
+LEGEND_FONTSIZE = 9
 PANEL_LABEL_FONTSIZE = 12
 LINEWIDTH = 2.4
 AXIS_COLOR = "#222222"
@@ -44,7 +44,7 @@ def apply_theme() -> None:
     sns.set_theme(style="ticks", context="paper")
     plt.rcParams.update({
         "font.family": "DejaVu Sans",
-        "font.size": 9,
+        "font.size": 10,
         "axes.titlesize": TITLE_FONTSIZE,
         "axes.labelsize": LABEL_FONTSIZE,
         "axes.labelweight": "bold",

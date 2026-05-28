@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
@@ -256,19 +257,48 @@ def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
 
 
 def landscape_overlay_regions(sim_df, region_df, out_path: Path, species: str,
-                               dpi: int = 300) -> Path:
-    """Single-sample overlay with yeast 5'UTR/CDS/3'UTR points separated."""
+                               region_null_df=None, dpi: int = 300) -> Path:
+    """Single-sample overlay with yeast UTR/CDS null contours and region points."""
     apply_theme()
     sim_sub = sim_df[sim_df["Species"] == species]
     exp_sub = region_df[region_df["Species"] == species]
+    null_sub = (
+        region_null_df[region_null_df["Species"] == species].copy()
+        if region_null_df is not None and not region_null_df.empty
+        else None
+    )
     if exp_sub.empty:
         return Path(out_path)
 
-    fig, ax = plt.subplots(figsize=(8.6, 6.4))
+    fig, ax = plt.subplots(figsize=(9.4, 6.9))
     handles: list = []
     labels: list[str] = []
 
-    if not sim_sub.empty:
+    if null_sub is not None and not null_sub.empty:
+        null_sub["Region_Group"] = np.where(null_sub["Region"] == "CDS", "CDS", "UTR")
+        contour_defs = [
+            ("UTR", "#7570B3", "UTR composition null"),
+            ("CDS", "#1B9E77", "CDS composition null"),
+        ]
+        for group, color, label in contour_defs:
+            sub = null_sub[null_sub["Region_Group"] == group]
+            if sub.empty:
+                continue
+            try:
+                cmap = sns.light_palette(color, as_cmap=True)
+                sns.kdeplot(
+                    data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                    ax=ax, fill=True, cmap=cmap, alpha=0.52,
+                    levels=8, thresh=0.04, warn_singular=False,
+                )
+            except Exception:
+                sns.scatterplot(
+                    data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                    ax=ax, color=color, alpha=0.20, s=14,
+                )
+            handles.append(Patch(facecolor=color, edgecolor=color, alpha=0.42, label=label))
+            labels.append(label)
+    elif not sim_sub.empty:
         try:
             sns.kdeplot(
                 data=sim_sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
@@ -308,7 +338,7 @@ def landscape_overlay_regions(sim_df, region_df, out_path: Path, species: str,
                               markersize=9, label=region))
         labels.append(region)
 
-    ax.set_title(f"{species} — DMS regions vs simulated null",
+    ax.set_title(f"{species} — DMS regions vs region-specific nulls",
                  fontsize=TITLE_FONTSIZE, pad=10)
     ax.set_xlabel(r"Normalized de novo DMS ΔG  (kcal/mol per nt)", fontsize=LABEL_FONTSIZE)
     ax.set_ylabel("Structured percentage (%)", fontsize=LABEL_FONTSIZE)
@@ -317,6 +347,132 @@ def landscape_overlay_regions(sim_df, region_df, out_path: Path, species: str,
     legend_outside(ax, handles=handles, labels=labels,
                    position="right", fontsize=9, frameon=True, framealpha=0.9)
     fig.tight_layout()
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return Path(out_path)
+
+
+def _add_composition_ratios(df):
+    out = df.copy()
+    gc = out.get("Pct_G", 0) + out.get("Pct_C", 0)
+    au = out.get("Pct_A", 0) + out.get("Pct_U", 0)
+    out["C_share_of_GC_Pct"] = np.where(gc > 0, 100.0 * out.get("Pct_C", 0) / gc, np.nan)
+    out["A_share_of_AU_Pct"] = np.where(au > 0, 100.0 * out.get("Pct_A", 0) / au, np.nan)
+    return out
+
+
+def yeast_region_mode_panels(region_null_df, region_df, out_path: Path,
+                             species: str = "Yeast", dpi: int = 300) -> Path:
+    """Yeast UTR/CDS folding modes with region-matched composition nulls.
+
+    Top row: thermodynamic landscape for each region.
+    Bottom row: nucleotide-bias contour for the same region, using GC% vs
+    C/(G+C). Experimental DMS region points are overlaid in both rows.
+    """
+    apply_theme()
+    null_sub = _add_composition_ratios(region_null_df[region_null_df["Species"] == species])
+    exp_sub = _add_composition_ratios(region_df[region_df["Species"] == species])
+    if exp_sub.empty:
+        return Path(out_path)
+
+    regions = [r for r in ("5'UTR", "CDS", "3'UTR/tail")
+               if (r in set(exp_sub["Region"])) or (r in set(null_sub["Region"]))]
+    if not regions:
+        return Path(out_path)
+
+    region_colors = {"5'UTR": "#7570B3", "CDS": "#1B9E77", "3'UTR/tail": "#D95F02"}
+    markers = {"5'UTR": "^", "CDS": "o", "3'UTR/tail": "s"}
+    fig, axes = plt.subplots(2, len(regions), figsize=(5.1 * len(regions), 8.8), squeeze=False)
+
+    for col, region in enumerate(regions):
+        color = region_colors.get(region, "#333333")
+        marker = markers.get(region, "o")
+        sim = null_sub[null_sub["Region"] == region]
+        obs = exp_sub[exp_sub["Region"] == region]
+
+        ax = axes[0, col]
+        if not sim.empty:
+            try:
+                sns.kdeplot(
+                    data=sim, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                    ax=ax, fill=True, color=color, alpha=0.35,
+                    levels=6, thresh=0.05, warn_singular=False,
+                )
+                sns.kdeplot(
+                    data=sim, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                    ax=ax, color=color, linewidths=1.2,
+                    levels=5, thresh=0.08, warn_singular=False,
+                )
+            except Exception:
+                sns.scatterplot(
+                    data=sim, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                    ax=ax, color=color, alpha=0.20, s=12,
+                )
+        if not obs.empty:
+            sns.scatterplot(
+                data=obs, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                ax=ax, color=color, marker=marker, s=120,
+                edgecolor="black", linewidth=1.1, zorder=5,
+            )
+            repel_labels(
+                ax,
+                xs=obs["Normalized_MFE_per_nt"].values,
+                ys=obs["Foldedness_Pct"].values,
+                labels=obs["Gene"].values,
+                color=color, fontsize=7, k=24,
+            )
+        ax.set_title(region, fontsize=TITLE_FONTSIZE - 1, pad=8)
+        ax.set_xlabel(r"Region DMS $\Delta$G / nt")
+        ax.set_ylabel("Structured percentage (%)" if col == 0 else "")
+        ax.margins(x=0.12, y=0.18)
+        style_axis(ax)
+
+        ax = axes[1, col]
+        sim_comp = sim.dropna(subset=["C_share_of_GC_Pct"])
+        obs_comp = obs.dropna(subset=["C_share_of_GC_Pct"])
+        if not sim_comp.empty:
+            try:
+                sns.kdeplot(
+                    data=sim_comp, x="Sequence_GC_Pct", y="C_share_of_GC_Pct",
+                    ax=ax, color=color, linewidths=1.4,
+                    levels=6, thresh=0.05, warn_singular=False,
+                )
+            except Exception:
+                sns.scatterplot(
+                    data=sim_comp, x="Sequence_GC_Pct", y="C_share_of_GC_Pct",
+                    ax=ax, color=color, alpha=0.18, s=10,
+                )
+        if not obs_comp.empty:
+            sns.scatterplot(
+                data=obs_comp, x="Sequence_GC_Pct", y="C_share_of_GC_Pct",
+                ax=ax, color=color, marker=marker, s=105,
+                edgecolor="black", linewidth=1.0, zorder=5,
+            )
+        ax.axhline(50, color="#777777", linestyle=":", linewidth=1.0, alpha=0.7)
+        ax.set_xlabel("Region GC content (%)")
+        ax.set_ylabel("C / (G + C) (%)" if col == 0 else "")
+        ax.set_ylim(-3, 103)
+        ax.margins(x=0.10, y=0.08)
+        style_axis(ax)
+
+    handles = [
+        Patch(facecolor=region_colors[r], alpha=0.35, label=f"{r} null contour")
+        for r in regions
+    ]
+    handles.extend([
+        Line2D([0], [0], marker=markers.get(r, "o"), color="w",
+               markerfacecolor=region_colors[r], markeredgecolor="black",
+               markersize=9, label=f"{r} DMS region")
+        for r in regions
+    ])
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, -0.01),
+               ncol=min(3, len(handles)), frameon=False, fontsize=9)
+    fig.suptitle(
+        f"{species} region-specific folding modes\n"
+        "Null contours preserve each region's empirical nucleotide composition; dots are genes",
+        fontsize=TITLE_FONTSIZE, y=1.01,
+    )
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
     return Path(out_path)

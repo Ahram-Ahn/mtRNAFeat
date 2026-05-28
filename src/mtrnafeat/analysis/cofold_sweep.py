@@ -154,6 +154,17 @@ def _run_one(job: _GeneJob) -> tuple[pd.DataFrame, pd.DataFrame]:
     return full, win
 
 
+def _collect_sequential(jobs: list[_GeneJob]) -> tuple[list[pd.DataFrame], list[pd.DataFrame]]:
+    full_frames: list[pd.DataFrame] = []
+    win_frames: list[pd.DataFrame] = []
+    for j in progress(jobs, desc="cofold-sweep (genes)", unit="gene"):
+        f, w = _run_one(j)
+        full_frames.append(f)
+        if not w.empty:
+            win_frames.append(w)
+    return full_frames, win_frames
+
+
 def run_cofold_sweep(cfg: Config, do_window_corr: bool = True
                       ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Returns (full_grid_df, window_corr_df)."""
@@ -185,23 +196,26 @@ def run_cofold_sweep(cfg: Config, do_window_corr: bool = True
         return pd.DataFrame(), pd.DataFrame()
 
     workers = max(1, int(cfg.n_workers))
-    full_frames: list[pd.DataFrame] = []
-    win_frames: list[pd.DataFrame] = []
     if workers == 1 or len(jobs) == 1:
-        for j in progress(jobs, desc="cofold-sweep (genes)", unit="gene"):
-            f, w = _run_one(j)
-            full_frames.append(f)
-            if not w.empty:
-                win_frames.append(w)
+        full_frames, win_frames = _collect_sequential(jobs)
     else:
-        with ProcessPoolExecutor(max_workers=workers) as ex:
-            futures = {ex.submit(_run_one, j): j for j in jobs}
-            for fut in progress(as_completed(futures), desc="cofold-sweep (genes)",
-                                  total=len(futures), unit="gene"):
-                f, w = fut.result()
-                full_frames.append(f)
-                if not w.empty:
-                    win_frames.append(w)
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as ex:
+                futures = {ex.submit(_run_one, j): j for j in jobs}
+                full_frames = []
+                win_frames = []
+                for fut in progress(as_completed(futures), desc="cofold-sweep (genes)",
+                                      total=len(futures), unit="gene"):
+                    f, w = fut.result()
+                    full_frames.append(f)
+                    if not w.empty:
+                        win_frames.append(w)
+        except (OSError, PermissionError) as exc:
+            step(
+                "cofold multiprocessing unavailable "
+                f"({type(exc).__name__}: {exc}); falling back to sequential execution"
+            )
+            full_frames, win_frames = _collect_sequential(jobs)
 
     full = pd.concat(full_frames, ignore_index=True) if full_frames else pd.DataFrame()
     win = pd.concat(win_frames, ignore_index=True) if win_frames else pd.DataFrame()

@@ -52,8 +52,24 @@ Region-level overlay for yeast-annotated samples.
 - **x-axis:** normalized de novo DMS ΔG for the projected region
   structure.
 - **y-axis:** structured percentage in that region.
+- **Contours:** UTR and CDS region-specific composition nulls when
+  `landscape/region_mode_nulls.csv` is available.
 - **Markers:** separate 5'UTR, CDS, and 3'UTR/tail points per gene.
-- **CSV:** `landscape/experimental_overlay_regions.csv`.
+- **CSV:** `landscape/experimental_overlay_regions.csv`,
+  `landscape/region_mode_nulls.csv`.
+
+### `landscape/yeast_region_folding_modes_{yeast_sample}.svg`
+Focused yeast architecture figure.
+
+- **Top row:** region-specific thermodynamic landscape
+  (normalized DMS ΔG vs structured percentage).
+- **Bottom row:** nucleotide-composition contour
+  (region GC% vs C/(G+C)).
+- **Contours:** simulated region nulls preserving each region's empirical
+  A/U/G/C composition; sampled lengths are capped at `sim_seq_length`.
+- **Dots:** per-gene DMS 5'UTR, CDS, and 3'UTR/tail regions.
+- **CSV:** `landscape/region_mode_nulls.csv`,
+  `landscape/experimental_overlay_regions.csv`.
 
 ### `landscape/pairing_bias_{GC,AU,GU}.svg`
 Per-base-pair-type composition relative to background.
@@ -231,7 +247,7 @@ Per-gene TIS energy comparison.
 
 ## substitution
 
-### `substitution/substitution_kde_{species}.svg`
+### `substitution/substitution_kde_panels_{species}.svg`
 Per-species KDE panels of ΔG distributions for each null pool.
 
 - **x-axis:** ΔG (kcal/mol).
@@ -241,11 +257,23 @@ Per-species KDE panels of ΔG distributions for each null pool.
 - **Faceted by gene:** one panel per gene.
 - **CSV:** `substitution/substitution_thermo_distribution.csv`.
 
-### `substitution/substitution_z_heatmap.svg`
+### `substitution/substitution_z_heatmap_{species}.svg`
 Z-score heatmap of (gene × null pool).
 
 - **Cell value:** standardized z-score of the wild-type ΔG against the
   null pool (more negative = wild-type more stable than expected).
+- **CSV:** `tables/substitution_thermo_summary.csv`.
+
+### `substitution/substitution_effect_shift_{species}.svg`
+Effect-size companion to the density plots.
+
+- **x-axis:** ΔΔG per nt versus the null-pool mean.
+- **y-axis:** gene.
+- **Panels:** flat-ACGU, positional-ACGU, and synonymous nulls.
+- **Markers:** WT Vienna MFE and DMS-structure ΔG; connecting segments
+  show how far the realized DMS structure sits from the WT MFE reference.
+- **Shading:** negative ΔΔG, where the reference is more stable than the
+  null mean.
 - **CSV:** `tables/substitution_thermo_summary.csv`.
 
 ---

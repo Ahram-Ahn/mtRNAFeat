@@ -430,6 +430,8 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
 
             z_mfe, p_mfe = _z_p(wt_mfe)
             z_dms, p_dms = _z_p(wt_dms)
+            delta_mfe = wt_mfe - mean
+            delta_dms = wt_dms - mean if np.isfinite(wt_dms) else float("nan")
             rows.append({
                 "Species": species,
                 "Gene": gene,
@@ -447,10 +449,20 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
                 "Pool_Mean_MFE": mean,
                 "Pool_Mean_MFE_per_nt": mean / chunk_len if chunk_len else float("nan"),
                 "Pool_SD_MFE": sd,
+                "Delta_WT_MFE_minus_Pool_Mean": delta_mfe,
+                "Delta_WT_MFE_per_nt_minus_Pool_Mean": (
+                    delta_mfe / chunk_len if chunk_len else float("nan")
+                ),
+                "Delta_WT_DMS_minus_Pool_Mean": delta_dms,
+                "Delta_WT_DMS_per_nt_minus_Pool_Mean": (
+                    delta_dms / chunk_len if chunk_len and np.isfinite(delta_dms) else float("nan")
+                ),
                 "Z_WT_MFE_vs_Pool": z_mfe,
                 "Empirical_p_WT_MFE_more_stable": p_mfe,
+                "Pool_Percentile_WT_MFE": 100.0 * p_mfe if np.isfinite(p_mfe) else float("nan"),
                 "Z_WT_DMS_vs_Pool": z_dms,
                 "Empirical_p_WT_DMS_more_stable": p_dms,
+                "Pool_Percentile_WT_DMS": 100.0 * p_dms if np.isfinite(p_dms) else float("nan"),
                 "N_Simulations": n,
                 "DMS_dG_Source": (
                     "Vienna eval_structure on projected .db CDS dot-bracket; "
@@ -459,6 +471,13 @@ def _summarize(dist: pd.DataFrame) -> pd.DataFrame:
                 ),
             })
     return pd.DataFrame(rows)
+
+
+def _collect_sequential(jobs: list[_PrefixJob]) -> list[pd.DataFrame]:
+    frames: list[pd.DataFrame] = []
+    for j in progress(jobs, desc="substitution (genes)", unit="gene"):
+        frames.append(_run_one(j))
+    return frames
 
 
 def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -514,16 +533,22 @@ def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
         return pd.DataFrame(), pd.DataFrame()
 
     workers = max(1, int(cfg.n_workers))
-    frames: list[pd.DataFrame] = []
     if workers == 1 or len(jobs) == 1:
-        for j in progress(jobs, desc="substitution (genes)", unit="gene"):
-            frames.append(_run_one(j))
+        frames = _collect_sequential(jobs)
     else:
-        with ProcessPoolExecutor(max_workers=workers) as ex:
-            futures = {ex.submit(_run_one, j): j for j in jobs}
-            for fut in progress(as_completed(futures), desc="substitution (genes)",
-                                  total=len(futures), unit="gene"):
-                frames.append(fut.result())
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as ex:
+                futures = {ex.submit(_run_one, j): j for j in jobs}
+                frames = []
+                for fut in progress(as_completed(futures), desc="substitution (genes)",
+                                      total=len(futures), unit="gene"):
+                    frames.append(fut.result())
+        except (OSError, PermissionError) as exc:
+            step(
+                "substitution multiprocessing unavailable "
+                f"({type(exc).__name__}: {exc}); falling back to sequential execution"
+            )
+            frames = _collect_sequential(jobs)
 
     dist = pd.concat([f for f in frames if not f.empty], ignore_index=True) if frames else pd.DataFrame()
     summary = _summarize(dist) if not dist.empty else pd.DataFrame()

@@ -19,6 +19,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     biased_heavy_df = landscape.simulate_biased_gradient(cfg, heavy_strand=True)
     exp_df = landscape.experimental_overlay(cfg)
     exp_region_df = landscape.experimental_overlay_regions(cfg)
+    region_null_df = landscape.simulate_region_mode_nulls(cfg, annotation_species="Yeast")
 
     canonical_csv(sim_df, out / "specific_conditions.csv")
     canonical_csv(grad_df, out / "gc_gradient.csv")
@@ -27,6 +28,8 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     canonical_csv(exp_df, out / "experimental_overlay.csv")
     if not exp_region_df.empty:
         canonical_csv(exp_region_df, out / "experimental_overlay_regions.csv")
+    if not region_null_df.empty:
+        canonical_csv(region_null_df, out / "region_mode_nulls.csv")
 
     landscape_plot.landscape_overlay(sim_df, exp_df, plot_path(out, "landscape_overlay", cfg.plot_format), dpi=cfg.dpi)
     landscape_plot.gradient_curves(grad_df, plot_path(out, "gc_gradient_curves", cfg.plot_format), dpi=cfg.dpi)
@@ -82,8 +85,15 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             landscape_plot.landscape_overlay_regions(
                 sim_df, exp_region_df,
                 plot_path(out, f"landscape_overlay_{file_safe_sample(species).lower()}_regions", cfg.plot_format),
-                species=species, dpi=cfg.dpi,
+                species=species, region_null_df=region_null_df, dpi=cfg.dpi,
             )
+            if not region_null_df.empty:
+                landscape_plot.yeast_region_mode_panels(
+                    region_null_df, exp_region_df,
+                    plot_path(out, f"yeast_region_folding_modes_{file_safe_sample(species).lower()}",
+                              cfg.plot_format),
+                    species=species, dpi=cfg.dpi,
+                )
 
     # Per-nucleotide composition bias plot (replaces the previous violin).
     for species in cfg.db_files:

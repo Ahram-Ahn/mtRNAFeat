@@ -62,11 +62,21 @@ def compute_empirical_freqs(db_path, exclude_genes: frozenset[str] = frozenset()
 
 
 def _base_composition(seq: str) -> dict[str, float]:
-    s = seq.upper()
+    s = seq.upper().replace("T", "U")
     n = len(s)
     if n == 0:
         return {b: 0.0 for b in "ACGU"}
     return {b: 100.0 * s.count(b) / n for b in "ACGU"}
+
+
+def _freqs_from_sequences(seqs: list[str]) -> dict[str, float]:
+    counts: Counter[str] = Counter()
+    for seq in seqs:
+        counts.update(seq.upper().replace("T", "U"))
+    total = sum(counts[b] for b in "AUGC")
+    if total == 0:
+        return {"A": 0.25, "U": 0.25, "G": 0.25, "C": 0.25}
+    return {b: counts[b] / total for b in "AUGC"}
 
 
 def species_freqs_for_pipeline(cfg: Config, heavy_strand: bool = False) -> dict[str, dict[str, float]]:
@@ -266,6 +276,99 @@ def experimental_overlay_regions(cfg: Config) -> pd.DataFrame:
                     "Pct_G": base["G"],
                     "Pct_U": base["U"],
                 })
+    return pd.DataFrame(rows)
+
+
+def simulate_region_mode_nulls(cfg: Config, annotation_species: str = "Yeast") -> pd.DataFrame:
+    """Region-matched composition nulls for UTR/CDS landscape modes.
+
+    For each sample that maps to ``annotation_species`` (Yeast by default),
+    aggregate empirical A/U/G/C frequencies separately for 5'UTR, CDS, and
+    3'UTR/tail. Simulated sequences then preserve each region's composition
+    and draw from the observed region length distribution, capped at
+    ``cfg.sim_seq_length`` so long CDS regions stay tractable.
+    """
+    mapping = getattr(cfg, "sample_annotation_species", None) or {}
+    region_sequences: dict[tuple[str, str, str], list[str]] = {}
+    region_lengths: dict[tuple[str, str, str], list[int]] = {}
+
+    for species, fname in cfg.db_files.items():
+        inferred = infer_annotation_species(species, mapping)
+        if inferred != annotation_species:
+            continue
+        for rec in parse_db(cfg.data_dir / fname):
+            try:
+                annot = annotation_for_sample(species, rec.gene, mapping)
+            except KeyError:
+                continue
+            regions = (
+                ("5'UTR", 0, int(annot["l_utr5"])),
+                ("CDS", int(annot["l_utr5"]), int(annot["l_utr5"]) + int(annot["l_cds"])),
+                (
+                    "3'UTR/tail",
+                    int(annot["l_utr5"]) + int(annot["l_cds"]),
+                    min(len(rec.sequence), int(annot["l_tr"])),
+                ),
+            )
+            for region, start, end in regions:
+                start = max(0, min(start, len(rec.sequence)))
+                end = max(start, min(end, len(rec.sequence)))
+                if end <= start:
+                    continue
+                key = (species, annotation_species, region)
+                seq_w = rec.sequence[start:end].upper().replace("T", "U")
+                region_sequences.setdefault(key, []).append(seq_w)
+                region_lengths.setdefault(key, []).append(len(seq_w))
+
+    if not region_sequences:
+        return pd.DataFrame()
+
+    rng = make_rng(cfg.seed + 31)
+    rows: list[dict] = []
+    n_per_region = int(cfg.sim_num_sequences)
+    length_cap = int(cfg.sim_seq_length)
+    step(
+        f"simulating {annotation_species} UTR/CDS region-mode nulls "
+        f"({n_per_region} sequences per region, length cap {length_cap} nt)"
+    )
+    for (species, ann_species, region), seqs in region_sequences.items():
+        freqs = _freqs_from_sequences(seqs)
+        lengths = np.array(region_lengths[(species, ann_species, region)], dtype=int)
+        desc = f"region null {species} {region}"
+        for _ in progress(range(n_per_region), desc=desc, unit="seq"):
+            observed_len = int(rng.choice(lengths))
+            length = max(1, min(observed_len, length_cap))
+            seq = random_sequence_with_freqs(length, freqs, rng)
+            struct, mfe = thermo.fold_mfe(seq)
+            gc_pair, au_pair, gu_pair = paired_composition(seq, struct)
+            base = _base_composition(seq)
+            rows.append({
+                "Condition": f"Region null: {species} {region}",
+                "Data_Type": "Simulation",
+                "Gene": "Simulated",
+                "Species": species,
+                "Annotation_Species": ann_species,
+                "Region": region,
+                "Length": length,
+                "Observed_Length_Sampled": observed_len,
+                "Length_Cap": length_cap,
+                "N_Source_Regions": len(seqs),
+                "MFE": mfe,
+                "Normalized_MFE_per_nt": mfe / length if length else 0.0,
+                "Foldedness_Pct": 100.0 * paired_fraction(struct),
+                "Sequence_GC_Pct": sequence_gc_pct(seq),
+                "Paired_GC_Pct": gc_pair,
+                "Paired_AU_Pct": au_pair,
+                "Paired_GU_Pct": gu_pair,
+                "Pct_A": base["A"],
+                "Pct_C": base["C"],
+                "Pct_G": base["G"],
+                "Pct_U": base["U"],
+                "Region_Freq_A": freqs["A"],
+                "Region_Freq_C": freqs["C"],
+                "Region_Freq_G": freqs["G"],
+                "Region_Freq_U": freqs["U"],
+            })
     return pd.DataFrame(rows)
 
 

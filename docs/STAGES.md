@@ -133,10 +133,17 @@ plus all `db_files` for the experimental overlay.
 - `landscape/experimental_overlay.csv`
 - `landscape/experimental_overlay_regions.csv` (when sample labels map
   to bundled Human/Yeast annotations)
+- `landscape/region_mode_nulls.csv` (for Yeast-annotated samples; region
+  composition nulls for 5'UTR / CDS / 3'UTR/tail, with sampled region
+  lengths capped at `sim_seq_length`)
 - `landscape/landscape_overlay.{svg|png}`
 - `landscape/landscape_overlay_{sample}.{svg|png}`
 - `landscape/landscape_overlay_{yeast_sample}_regions.{svg|png}` —
-  region-level 5'UTR / CDS / 3'UTR DMS points for yeast-annotated samples.
+  region-level 5'UTR / CDS / 3'UTR DMS points over UTR and CDS
+  composition-null contours for yeast-annotated samples.
+- `landscape/yeast_region_folding_modes_{yeast_sample}.{svg|png}` —
+  region-specific null contours plus per-gene DMS dots for thermodynamic
+  mode and C/(G+C) composition.
 - `landscape/gc_gradient_curves.{svg|png}`
 - `landscape/pairing_bias_{GC,AU,GU}.{svg|png}`
 - `landscape/pairing_bias_{GC,AU}_{sample}.{svg|png}`
@@ -572,7 +579,8 @@ scale checks.
 - `substitution/substitution_thermo_distribution.csv` (long-format raw — one row per (species, gene, pool, simulation) with that variant's ΔG)
 - `substitution/substitution_kde_panels_{human,yeast}.{svg|png}` (per-species small-multiples KDE)
 - `substitution/substitution_z_heatmap_{human,yeast}.{svg|png}` (per-species heatmap of Z(WT_MFE − Pool))
-- `tables/substitution_thermo_summary.csv` (per-gene Z and p; the only summary CSV — there is no copy under `substitution/`)
+- `substitution/substitution_effect_shift_{human,yeast}.{svg|png}` (per-species ΔΔG-per-nt dot plot; negative values are more stable than the null mean)
+- `tables/substitution_thermo_summary.csv` (per-gene Z, p, percentile, and ΔΔG effect sizes; the only summary CSV — there is no copy under `substitution/`)
 
 **Flags (after `--`)**:
 | Flag | Type | Effect |

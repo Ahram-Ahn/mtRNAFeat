@@ -60,4 +60,5 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     canonical_csv(summary, tables / "substitution_thermo_summary.csv")
     substitution_plot.kde_panels(dist, out, cfg.plot_format, dpi=cfg.dpi)
     substitution_plot.z_heatmap(summary, out, cfg.plot_format, dpi=cfg.dpi)
+    substitution_plot.effect_shift_panels(summary, out, cfg.plot_format, dpi=cfg.dpi)
     return 0

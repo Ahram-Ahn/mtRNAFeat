@@ -170,3 +170,124 @@ def z_heatmap(summary: pd.DataFrame, out_dir: Path, plot_format: str,
         _zheat_for_species(summary[summary["Species"] == sp], sp, out_path, dpi)
         paths.append(out_path)
     return paths
+
+
+def _ensure_effect_columns(summary: pd.DataFrame) -> pd.DataFrame:
+    out = summary.copy()
+    if "Delta_WT_MFE_per_nt_minus_Pool_Mean" not in out.columns:
+        out["Delta_WT_MFE_per_nt_minus_Pool_Mean"] = (
+            (out["WT_MFE"] - out["Pool_Mean_MFE"]) / out["Length_nt"]
+        )
+    if "Delta_WT_DMS_per_nt_minus_Pool_Mean" not in out.columns:
+        out["Delta_WT_DMS_per_nt_minus_Pool_Mean"] = (
+            (out["WT_DMS_Eval"] - out["Pool_Mean_MFE"]) / out["Length_nt"]
+        )
+    return out
+
+
+def _effect_shift_for_species(sub_summary: pd.DataFrame, species: str,
+                              out_path: Path, dpi: int) -> Path:
+    apply_theme()
+    sub_summary = _ensure_effect_columns(sub_summary)
+    if sub_summary.empty:
+        fig = plt.figure(figsize=(4, 3))
+        plt.text(0.5, 0.5, f"No {species} data", ha="center", va="center")
+        fig.savefig(out_path, dpi=dpi)
+        plt.close(fig)
+        return out_path
+
+    pool_order = ["flat_acgu", "positional_acgu", "synonymous"]
+    syn = sub_summary[sub_summary["Pool"] == "synonymous"]
+    if syn.empty:
+        gene_order = sorted(sub_summary["Gene"].unique())
+    else:
+        gene_order = (
+            syn.sort_values("Delta_WT_MFE_per_nt_minus_Pool_Mean")["Gene"]
+            .drop_duplicates()
+            .tolist()
+        )
+    y_lookup = {gene: i for i, gene in enumerate(gene_order)}
+
+    fig, axes = plt.subplots(
+        1, 3, figsize=(15.8, max(4.5, 0.42 * len(gene_order) + 2.2)),
+        sharey=True,
+    )
+    all_vals = []
+    for col in ("Delta_WT_MFE_per_nt_minus_Pool_Mean",
+                "Delta_WT_DMS_per_nt_minus_Pool_Mean"):
+        vals = sub_summary[col].replace([np.inf, -np.inf], np.nan).dropna().tolist()
+        all_vals.extend(vals)
+    xmax = max(abs(v) for v in all_vals) if all_vals else 0.02
+    xlim = (-1.12 * xmax, 1.12 * xmax)
+
+    for ax, pool in zip(axes, pool_order, strict=True):
+        pool_df = sub_summary[sub_summary["Pool"] == pool]
+        for _, row in pool_df.iterrows():
+            gene = row["Gene"]
+            y = y_lookup.get(gene)
+            if y is None:
+                continue
+            wt = float(row["Delta_WT_MFE_per_nt_minus_Pool_Mean"])
+            dms = float(row["Delta_WT_DMS_per_nt_minus_Pool_Mean"])
+            if np.isfinite(wt) and np.isfinite(dms):
+                ax.plot([wt, dms], [y, y], color="#B0B0B0", linewidth=1.0, zorder=1)
+            if np.isfinite(wt):
+                ax.scatter(wt, y, s=62, color="black", edgecolor="white",
+                           linewidth=0.7, zorder=3)
+            if np.isfinite(dms):
+                ax.scatter(dms, y, s=70, marker="D", color="#D62728",
+                           edgecolor="black", linewidth=0.7, zorder=4)
+        ax.axvspan(xlim[0], 0, color="#2CA02C", alpha=0.08, zorder=0)
+        ax.axvline(0, color="#555555", linestyle=":", linewidth=1.1)
+        ax.set_xlim(*xlim)
+        ax.set_title(pool, fontsize=TITLE_FONTSIZE - 3, pad=8)
+        ax.set_xlabel(r"$\Delta\Delta$G per nt vs pool mean")
+        ax.set_yticks(range(len(gene_order)))
+        ax.set_ylim(len(gene_order) - 0.5, -0.5)
+        if ax is axes[0]:
+            ax.set_yticklabels(gene_order)
+        else:
+            ax.tick_params(labelleft=False)
+        style_axis(ax)
+    axes[0].set_ylabel("Gene", fontsize=LABEL_FONTSIZE)
+
+    handles = [
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="black",
+               markeredgecolor="white", markersize=8, label="WT Vienna MFE"),
+        Line2D([0], [0], marker="D", color="w", markerfacecolor="#D62728",
+               markeredgecolor="black", markersize=8, label="DMS structure ΔG"),
+        Patch(facecolor="#2CA02C", alpha=0.08, label="More stable than null mean"),
+    ]
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, -0.01),
+               ncol=3, frameon=False, fontsize=LEGEND_FONTSIZE)
+    fig.suptitle(
+        f"{species} — effect size of wild-type sequence and DMS structure vs recoding nulls",
+        fontsize=TITLE_FONTSIZE - 2, y=1.02,
+    )
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def effect_shift_panels(summary: pd.DataFrame, out_dir: Path, plot_format: str,
+                        dpi: int = 300) -> list[Path]:
+    """Per-species effect-size dot plots.
+
+    Negative ΔΔG means the WT reference is more stable than that null pool's
+    mean. This is the reader-facing companion to the KDE panels.
+    """
+    if summary.empty:
+        return []
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fmt = plot_format.lstrip(".")
+    species_present = [s for s in _SPECIES_ORDER if s in summary["Species"].unique()]
+    if not species_present:
+        species_present = sorted(summary["Species"].unique())
+    paths = []
+    for sp in species_present:
+        out_path = out_dir / f"substitution_effect_shift_{sp.lower()}.{fmt}"
+        _effect_shift_for_species(summary[summary["Species"] == sp], sp, out_path, dpi)
+        paths.append(out_path)
+    return paths
