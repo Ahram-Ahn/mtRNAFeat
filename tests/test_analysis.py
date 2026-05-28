@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from mtrnafeat.analysis import features, tis
+from mtrnafeat.analysis import features, landscape, tis
 from mtrnafeat.analysis.statistics import paired_composition, sequence_gc_pct, transcript_stats
 from mtrnafeat.config import Config
 from mtrnafeat.io.db_parser import DbRecord, parse_db
@@ -58,6 +58,44 @@ def test_features_simulated_uses_configured_species_nulls(monkeypatch):
     assert set(spans["Species"]) == {"Test"}
 
 
+def test_landscape_experimental_overlay_recalculates_db_energy(monkeypatch, tmp_path):
+    db = tmp_path / "sample.db"
+    db.write_text(">G1: -99.0 kcal/mol\nGCAU\n(())\n")
+    monkeypatch.setattr(landscape.thermo, "eval_structure", lambda seq, struct: -4.5)
+    cfg = Config(data_dir=tmp_path, db_files={"Sample": "sample.db"})
+
+    df = landscape.experimental_overlay(cfg)
+
+    row = df.iloc[0]
+    assert row["MFE"] == -4.5
+    assert row["Header_MFE"] == -99.0
+    assert "eval_structure" in row["MFE_Source"]
+
+
+def test_region_overlay_uses_sample_annotation_mapping(monkeypatch, tmp_path):
+    db = tmp_path / "ko.db"
+    db.write_text(">COX2: -1.0 kcal/mol\n" + "A" * 30 + "\n" + "." * 30 + "\n")
+    monkeypatch.setattr(landscape.thermo, "eval_structure", lambda seq, struct: -float(len(seq)))
+    monkeypatch.setattr(landscape, "annotation_for_sample", lambda sample, gene, mapping: {
+        "l_tr": 30,
+        "l_utr5": 5,
+        "l_cds": 20,
+        "l_utr3": 5,
+    })
+    monkeypatch.setattr(landscape, "infer_annotation_species", lambda sample, mapping: mapping.get(sample))
+    cfg = Config(
+        data_dir=tmp_path,
+        db_files={"KO1": "ko.db"},
+        sample_annotation_species={"KO1": "Yeast"},
+    )
+
+    df = landscape.experimental_overlay_regions(cfg)
+
+    assert set(df["Region"]) == {"5'UTR", "CDS", "3'UTR/tail"}
+    assert set(df["Annotation_Species"]) == {"Yeast"}
+    assert df.set_index("Region").loc["CDS", "MFE"] == -20.0
+
+
 def test_tis_downstream_window_stays_inside_cds(monkeypatch, tmp_path):
     rec = DbRecord(
         gene="COX1",
@@ -68,7 +106,7 @@ def test_tis_downstream_window_stays_inside_cds(monkeypatch, tmp_path):
     )
 
     monkeypatch.setattr(tis, "parse_db", lambda _path: [rec])
-    monkeypatch.setattr(tis, "annotation_for", lambda _species, _gene: {
+    monkeypatch.setattr(tis, "annotation_for_sample", lambda _species, _gene, _mapping: {
         "l_tr": 40,
         "l_utr5": 18,
         "l_cds": 5,

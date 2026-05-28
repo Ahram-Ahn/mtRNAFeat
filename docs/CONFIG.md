@@ -63,10 +63,22 @@ value for that run only.
 ### `db_files`
 - **Type**: dict[str, str] · **Default**:
   `{Human: human_mt-mRNA_all.db, Yeast: yeast_mt-mRNA_all.db}`
-- **Controls**: species → `.db` filename. Path resolved relative to `data_dir`.
+- **Controls**: sample/species label → `.db` filename. Path resolved relative to `data_dir`.
 - **Used by**: every stage iterating over species.
-- **When to change**: adding a new species, or pointing at an alternative
-  reactivity dataset.
+- **When to change**: adding independent samples, or pointing at an alternative
+  reactivity dataset. For runs with more than the default Human/Yeast pair,
+  `run-all` treats samples independently and skips `compare`/`substitution`
+  unless `--include-comparison` is passed.
+
+### `sample_annotation_species`
+- **Type**: dict[str, str] · **Default**: `{}`
+- **Controls**: maps arbitrary sample labels in `db_files` to bundled
+  annotation tables (`Human` or `Yeast`) for UTR/CDS/TIS-aware stages.
+  Labels containing `human` or `yeast` are inferred automatically.
+- **Used by**: `landscape`, `features`, `window`, `local_probability`,
+  `structure_deviation`, `gene_panel`, `tis`, input validation.
+- **When to change**: when sample names such as `WT`, `KO1`, or `CAP_treated`
+  do not reveal whether Human or Yeast coordinates should be used.
 
 ### `alignment_file`
 - **Type**: str · **Default**: `PAL2NL_aa-dna_alignment_yeast_human.txt`
@@ -149,7 +161,7 @@ value for that run only.
 - **Controls**: process pool size for stages that fan out per-gene
   (window, substitution, cofold, kinetic).
 - **Used by**: most heavy stages.
-- **When to change**: tune to physical cores. Note: `run-all --parallel`
+- **When to change**: tune to physical cores. Note: `run-all ... -- --parallel`
   uses a separate orchestrator pool sized by `cpu_count()`.
 
 ---

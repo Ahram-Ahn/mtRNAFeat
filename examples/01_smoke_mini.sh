@@ -13,7 +13,7 @@ rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR"
 
 echo "[smoke] sequential run → $OUTDIR"
-mtrnafeat run-all --config test_data/mini.config.yaml --outdir "$OUTDIR" -- --skip kinetic
+mtrnafeat run-all --config test_data/mini.config.yaml --outdir "$OUTDIR"
 echo
 echo "[smoke] outputs:"
 find "$OUTDIR" -maxdepth 2 -type f | sort

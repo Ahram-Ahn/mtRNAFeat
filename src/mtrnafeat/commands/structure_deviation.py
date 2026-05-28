@@ -54,8 +54,8 @@ import pandas as pd
 from mtrnafeat.analysis import deviation
 from mtrnafeat.analysis import local_probability as lp_analysis
 from mtrnafeat.config import Config
-from mtrnafeat.constants import file_safe_gene
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.constants import file_safe_gene, file_safe_sample
+from mtrnafeat.io.annotations import annotation_for_sample
 from mtrnafeat.io.writers import canonical_csv
 from mtrnafeat.viz import structure_deviation as viz
 from mtrnafeat.viz.style import plot_path
@@ -187,7 +187,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             dms_paired_binary=result.p_dms_raw.astype("int8"),
         )
         try:
-            annot = annotation_for(result.species, result.gene)
+            annot = annotation_for_sample(result.species, result.gene, cfg.sample_annotation_species)
         except KeyError:
             annot = None
         win_df = lp_analysis.per_window_agreement_table(
@@ -209,7 +209,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             result, gene_regions,
             out_path=plot_path(
                 out,
-                f"structure_deviation_{result.species}_{file_safe_gene(result.gene)}",
+                f"structure_deviation_{file_safe_sample(result.species)}_{file_safe_gene(result.gene)}",
                 cfg.plot_format,
             ),
             cfg=cfg, dpi=cfg.dpi,
@@ -224,7 +224,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
                 regions_df,
                 out_path=plot_path(
                     out,
-                    f"structure_deviation_lollipop_{species}",
+                    f"structure_deviation_lollipop_{file_safe_sample(species)}",
                     cfg.plot_format,
                 ),
                 species=species, cfg=cfg, dpi=cfg.dpi,

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from mtrnafeat.constants import PALETTE
+from mtrnafeat.viz.samples import ordered_samples, sample_color
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     TITLE_FONTSIZE,
@@ -31,7 +31,7 @@ def heatmap_size_ratios(df_motifs: pd.DataFrame, max_size: int, out_path: Path, 
     counts["Total"] = counts.groupby(["Species", "Type", "Motif"])["Count"].transform("sum")
     counts["Ratio_Pct"] = 100.0 * counts["Count"] / counts["Total"]
 
-    species_list = ["Human", "Yeast"]
+    species_list = ordered_samples(counts["Species"].unique())
     fig, axes = plt.subplots(1, len(species_list), figsize=(8 * len(species_list), 7.5))
     if len(species_list) == 1:
         axes = [axes]
@@ -106,8 +106,10 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
             "Avg_Total_Loop": float(avg_loop) if pd.notna(avg_loop) else 0.0,
         })
     df_scatter = pd.DataFrame(transcripts)
-    species_list = ["Human", "Yeast"]
-    fig, axes = plt.subplots(1, 2, figsize=(16.5, 7.0), sharex=True, sharey=True)
+    species_list = ordered_samples(df_scatter["Species"].unique()) if not df_scatter.empty else []
+    n_sp = max(len(species_list), 1)
+    fig, axes = plt.subplots(1, n_sp, figsize=(8.25 * n_sp, 7.0), sharex=True, sharey=True, squeeze=False)
+    axes = axes[0]
 
     if not df_scatter.empty:
         xs_all = df_scatter["Avg_Macro_Stem"].values
@@ -125,7 +127,8 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
         # Per-species sim-cloud cmap — muted sequential palettes that don't
         # overwhelm the experimental scatter on top. (The earlier viridis /
         # cividis fills were too saturated.)
-        cmap = "Reds" if sp == "Human" else "Oranges"
+        cmap_cycle = ["Reds", "Oranges", "Blues", "Greens", "Purples", "Greys"]
+        cmap = cmap_cycle[list(species_list).index(sp) % len(cmap_cycle)]
         sim_drawn = False
         if not sim_sub.empty:
             try:
@@ -140,7 +143,7 @@ def phase_space(df_motifs: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
                 ax.hexbin(sim_sub["Avg_Macro_Stem"], sim_sub["Avg_Total_Loop"],
                            gridsize=18, cmap=cmap, mincnt=1, alpha=0.6)
                 sim_drawn = True
-        color = PALETTE.get(sp, "red")
+        color = sample_color(sp, list(species_list).index(sp))
         if not exp_sub.empty:
             sns.scatterplot(data=exp_sub, x="Avg_Macro_Stem", y="Avg_Total_Loop",
                             ax=ax, color=color, s=130, edgecolor="black", linewidth=1.3, zorder=5,
@@ -193,9 +196,7 @@ def span_boxplot(df_spans: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     apply_theme()
     df = df_spans.copy()
     df = df[df["Span"].astype(float) > 0]  # log-x guard
-    species_order = [s for s in ("Human", "Yeast") if s in df["Species"].unique()]
-    if not species_order:
-        species_order = sorted(df["Species"].unique())
+    species_order = ordered_samples(df["Species"].unique())
     n_sp = len(species_order)
 
     fig, axes = plt.subplots(1, n_sp, figsize=(7.0 * n_sp, 5.6),
@@ -203,7 +204,7 @@ def span_boxplot(df_spans: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     if n_sp == 1:
         axes = [axes]
 
-    species_color = {"Human": "#D62728", "Yeast": "#FF7F0E"}
+    species_color = {sp: sample_color(sp, i) for i, sp in enumerate(species_order)}
     type_style = {"DMS": {"linestyle": "-", "lw": 2.4, "alpha": 0.95},
                   "Sim": {"linestyle": "--", "lw": 2.0, "alpha": 0.85}}
 

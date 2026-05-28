@@ -22,12 +22,22 @@ data_dir: data
 # (stats/, landscape/, ... plus a centralized tables/).
 outdir: runs/default
 
-# Mapping species → .db filename (resolved relative to data_dir).
-# Add or remove species here; each .db file uses the 3-line format
+# Mapping sample/species label → .db filename (resolved relative to data_dir).
+# Add or remove samples here; each .db file uses the 3-line format
 # (>GENE: -X kcal/mol \n SEQUENCE \n DOTBRACKET).
 db_files:
   Human: human_mt-mRNA_all.db
   Yeast: yeast_mt-mRNA_all.db
+
+# Optional mapping from arbitrary sample labels to bundled annotation tables.
+# Use this when labels do not contain "human" or "yeast", but TIS/UTR/CDS
+# plots should still use the bundled coordinates.
+sample_annotation_species: {}
+# Example:
+# sample_annotation_species:
+#   WT: Yeast
+#   KO1: Yeast
+#   CAP_control: Human
 
 # Codon-aligned PAL2NL alignment for the comparative COX1 stage.
 # Resolved relative to data_dir. The `compare` stage skips silently if
@@ -76,7 +86,7 @@ n_shuffles: 200
 
 # ──────────────────────── Parallelism ────────────────────────
 # Worker pool size for stages that fan out per-gene (window, substitution,
-# cofold, ...). The `run-all --parallel` orchestrator uses up to
+# cofold, ...). The `run-all ... -- --parallel` orchestrator uses up to
 # min(len(stages)+1, cpu_count()) workers separately.
 n_workers: 4
 

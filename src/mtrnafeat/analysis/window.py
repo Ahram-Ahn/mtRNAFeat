@@ -30,7 +30,7 @@ from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
 from mtrnafeat.core.structure import filter_max_bp_span
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample, full_transcript_annotation
 from mtrnafeat.io.db_parser import get_record
 from mtrnafeat.progress import step
 
@@ -114,7 +114,10 @@ def fold_transcript(species: str, db_path: str | Path, gene: str, cfg: Config,
             f"Unknown fold_engine: {engine!r} (expected one of {_VALID_ENGINES})"
         )
     rec = get_record(db_path, gene)
-    annot = annotation_for(species, gene)
+    try:
+        annot = annotation_for_sample(species, gene, cfg.sample_annotation_species)
+    except KeyError:
+        annot = full_transcript_annotation(len(rec.sequence))
 
     # DMS structure from the .db, with span-sanitized variant.
     dms_struct = rec.structure

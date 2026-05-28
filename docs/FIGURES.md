@@ -28,13 +28,32 @@ AU fraction, and median paired-pair span.
 ## landscape
 
 ### `landscape/landscape_overlay.svg`
-GC-gradient simulation overlay against experimental DMS data.
+Per-sample simulation overlay against experimental DMS data.
 
-- **x-axis:** simulated GC fraction (or per-species empirical GC).
-- **y-axis:** mean MFE per nucleotide (kcal/mol/nt).
-- **Lines:** simulated null pools at each GC step (median + IQR band).
-- **Markers:** observed Human / Yeast transcripts.
-- **CSV:** `landscape/gc_gradient.csv`.
+- **x-axis:** normalized de novo DMS / simulated MFE
+  (kcal/mol/nt).
+- **y-axis:** structured percentage (% nucleotides paired).
+- **Filled clouds:** simulated null structures for each sample.
+- **Markers:** DMS-derived transcripts; ΔG is recomputed by ViennaRNA
+  `eval_structure`, not taken from the `.db` header.
+- **CSV:** `landscape/specific_conditions.csv`,
+  `landscape/experimental_overlay.csv`.
+
+### `landscape/landscape_overlay_{sample}.svg`
+Single-sample version of the overlay above, with sample-specific null
+cloud plus configured GC-reference clouds.
+
+- **CSV:** `landscape/specific_conditions.csv`,
+  `landscape/experimental_overlay.csv`.
+
+### `landscape/landscape_overlay_{yeast_sample}_regions.svg`
+Region-level overlay for yeast-annotated samples.
+
+- **x-axis:** normalized de novo DMS ΔG for the projected region
+  structure.
+- **y-axis:** structured percentage in that region.
+- **Markers:** separate 5'UTR, CDS, and 3'UTR/tail points per gene.
+- **CSV:** `landscape/experimental_overlay_regions.csv`.
 
 ### `landscape/pairing_bias_{GC,AU,GU}.svg`
 Per-base-pair-type composition relative to background.
@@ -42,7 +61,19 @@ Per-base-pair-type composition relative to background.
 - **x-axis:** simulated GC fraction.
 - **y-axis:** fraction of paired positions whose partner is the named
   base-pair class.
-- **CSV:** `landscape/pairing_bias.csv`.
+- **CSV:** `landscape/gc_gradient.csv`, `landscape/experimental_overlay.csv`.
+
+### `landscape/paired_nt_fractions_{sample}.svg`
+Three-panel view of absolute paired-nucleotide budget.
+
+- **Panel A:** foldedness (% nt paired).
+- **Panel B:** G-C paired nucleotides as % of sequence plus theoretical
+  composition ceiling.
+- **Panel C:** A-U paired nucleotides as % of sequence plus ceiling.
+- **Legend:** outside the plot boundary.
+- **CSV:** `landscape/gc_gradient.csv`,
+  `landscape/gc_gradient_biased_heavy.csv`,
+  `landscape/experimental_overlay.csv`.
 
 ---
 
@@ -51,28 +82,28 @@ Per-base-pair-type composition relative to background.
 ### `features/heatmap_size_ratios.svg`
 Element-size composition heatmap.
 
-- **x-axis:** structural element type (helix length, hairpin loop,
-  internal loop, multi-loop, bulge, free 5′/3′).
-- **y-axis:** transcript region (5′UTR / CDS / 3′UTR) × species.
-- **Color:** size ratio against the genome-wide pool (log2).
-- **CSV:** `features/raw_motifs.csv` (raw counts), aggregated by region
-  in the plotting code.
+- **x-axis:** Simulated and DMS motif columns for each structural element.
+- **y-axis:** element size, capped by `max_heatmap_size`.
+- **Color:** percent enrichment within each sample/type/motif group.
+- **CSV:** `features/raw_motifs.csv`.
 
 ### `features/phase_space_contour.svg`
-2-D contour of MFE vs paired-fraction.
+2-D contour of helix-size vs loop-size feature space.
 
-- **x-axis:** paired fraction (0–1).
-- **y-axis:** MFE per nucleotide (kcal/mol/nt).
-- **Contours:** kernel density of all transcripts; overlay of region
-  centroids (5′UTR / CDS / 3′UTR).
+- **x-axis:** average macro-helix size per transcript.
+- **y-axis:** average loop size per transcript
+  (hairpin + bulge + internal loop).
+- **Contours/clouds:** simulated sample-specific nulls.
+- **Markers:** DMS-derived transcripts labelled by gene.
 - **CSV:** derived from `features/raw_motifs.csv`.
 
 ### `features/span_boxplot.svg`
-Pair-span distribution by region.
+Base-pairing distance ECDF.
 
-- **x-axis:** transcript region.
-- **y-axis:** base-pair span in nucleotides (log scale).
-- **CSV:** `features/raw_motifs.csv`.
+- **x-axis:** base-pairing distance `|i-j|` in nt, log scale.
+- **y-axis:** cumulative fraction of pairs.
+- **Lines:** Sim vs DMS per sample; median guide lines are shown.
+- **CSV:** `features/raw_spans.csv`.
 
 ---
 
@@ -82,12 +113,10 @@ Pair-span distribution by region.
 Whole-transcript fold-and-compare trace per gene.
 
 - **x-axis:** transcript position (1-based).
-- **y-axis (top panel):** smoothed paired fraction; three lines for
-  DMS-derived, Vienna full-fold, and configured-span engine fold.
-- **y-axis (bottom panel):** signed Δ(paired fraction) between the
-  engine-span fold and the DMS reference, with a band at ±0.25.
-- **Architecture strip (under both panels):** 5′UTR (blue), CDS (gray),
-  3′UTR (orange) with the start codon marked.
+- **Top panel:** smoothed paired fraction for DMS-derived dot-bracket
+  vs the configured span-limited folding engine.
+- **Bottom strip:** transcript architecture (5′UTR / CDS / 3′UTR) when
+  annotations are available.
 - **CSV:** `window/window_per_position.csv` (long-format per gene).
 
 ---
@@ -189,15 +218,14 @@ are conservative `none` / `0` to keep `run-all` fast), each region in
 ## tis
 
 ### `tis/tis_zoom_grid.svg`
-Per-gene TIS −50/+50 nt zoom grid.
+Per-gene TIS energy comparison.
 
-- **x-axis:** position relative to start codon (−50 to +50 nt).
-- **y-axis:** smoothed paired fraction; one line for DMS-derived, one
-  for engine MFE, both at the configured `rolling_window`.
-- **Vertical line at 0:** start codon.
-- **Faceted by (species, gene):** one panel per gene.
-- **CSV:** `tis/tis_dms_vs_mfe.csv` (one row per (species, gene,
-  position)).
+- **x-axis:** gene, with `*` when the requested upstream context is
+  truncated by a short 5'UTR.
+- **y-axis:** ΔG (kcal/mol).
+- **Bars:** DMS-derived projected TIS window vs Vienna MFE on the same
+  sequence window.
+- **CSV:** `tis/tis_dms_vs_mfe.csv`.
 
 ---
 
@@ -227,19 +255,19 @@ Z-score heatmap of (gene × null pool).
 ### `cofold/cofold_gap_closure.svg`
 Gap-closure summary for the CoFold (α, τ) sweep.
 
-- **x-axis:** gene.
-- **y-axis:** |ΔG − ΔG_DMS| (kcal/mol), comparing plain Vienna (`α=0`)
-  with the best CoFold sweep cell.
-- **Faceted by species.**
+- **x-axis:** α penalty strength.
+- **y-axis:** fraction of the plain-Vienna-to-DMS ΔG gap closed
+  (0 = plain Vienna, 1 = matches DMS-evaluated ΔG).
+- **Lines:** τ values; shading = ±1 SD across genes.
 - **CSV:** `cofold/cofold_grid.csv`; per-gene best in
   `cofold/cofold_best_per_gene.csv`.
 
 ### `cofold/cofold_parameter_landscape.svg`
 Species-level α/τ heatmap of the CoFold sweep.
 
-- **x-axis:** τ (decay constant, nt).
-- **y-axis:** α (penalty strength, kcal/mol).
-- **Color:** median |ΔG_cofold − ΔG_DMS| (kcal/mol), aggregated over genes.
+- **x-axis:** α (penalty strength, kcal/mol).
+- **y-axis:** τ (decay length, nt).
+- **Color:** mean |CoFold − DMS| ΔG gap (kcal/mol), aggregated over genes.
 - **CSV:** `cofold/cofold_grid.csv`.
 
 ### `cofold/cofold_parameter_landscape_{species}.svg`
@@ -279,12 +307,11 @@ Directional substitution flux Yeast→Human and Human→Yeast.
 ### `gene_panels/panel_{species}_{gene}.svg`
 Per-gene composite panel.
 
-- **Top panel:** GC and AU composition tracks.
-- **Middle panel:** smoothed DMS-paired fraction.
-- **Bottom panel:** local foldedness (paired-pair density) with an
-  architecture strip (5′UTR / CDS / 3′UTR).
-- **CSV:** built directly from the input `.db` records and the
-  per-position outputs of `stats` and `local-probability`.
+- **Panel A:** base composition counts.
+- **Panel B:** paired-pair composition of the DMS-derived structure.
+- **Panel C:** rolling local paired fraction along the transcript, with
+  an architecture strip when annotations are available.
+- **CSV:** built directly from the input `.db` records.
 
 ---
 

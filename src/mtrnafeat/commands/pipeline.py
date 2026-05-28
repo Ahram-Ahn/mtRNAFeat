@@ -25,12 +25,15 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from mtrnafeat.config import Config
 
-INDEPENDENT = (
+SAMPLE_STAGES = (
     "stats", "landscape", "features",
     "window", "local_probability",
     "structure_deviation",
-    "tis", "compare",
-    "substitution", "cofold", "gene_panel",
+    "tis", "cofold", "gene_panel",
+)
+
+COMPARISON_STAGES = (
+    "compare", "substitution",
 )
 
 # Per-stage extra args appended after `--` when invoking the subcommand.
@@ -41,20 +44,30 @@ STAGE_EXTRAS: dict[str, list[str]] = {}
 
 
 def _parse(args: list[str] | None) -> dict:
-    parsed = {"parallel": False, "skip": set()}
+    parsed = {"parallel": False, "skip": set(), "include_comparison": False}
     if not args:
         return parsed
     it = iter(args)
     for tok in it:
         if tok == "--parallel":
             parsed["parallel"] = True
+        elif tok == "--include-comparison":
+            parsed["include_comparison"] = True
         elif tok == "--skip":
             parsed["skip"].update(next(it).split(","))
         else:
             raise SystemExit(
-                f"run-all: unknown flag {tok!r}. Supported: --parallel, --skip <stage1,stage2>."
+                f"run-all: unknown flag {tok!r}. Supported: --parallel, --include-comparison, --skip <stage1,stage2>."
             )
     return parsed
+
+
+def _stages_for_config(cfg: Config, include_comparison: bool) -> tuple[str, ...]:
+    labels = set(cfg.db_files)
+    default_pair = labels == {"Human", "Yeast"} and len(cfg.db_files) == 2
+    if include_comparison or default_pair:
+        return (*SAMPLE_STAGES, *COMPARISON_STAGES)
+    return SAMPLE_STAGES
 
 
 def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, seed: int | None) -> tuple[str, int, int]:
@@ -73,10 +86,10 @@ def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, 
     return name, int(time.time() - started), int(proc.returncode)
 
 
-def _sequential(cfg: Config, skip: set[str]) -> None:
+def _sequential(cfg: Config, skip: set[str], stages: tuple[str, ...]) -> None:
     print(f"[mtrnafeat] running pipeline (sequential) → {cfg.outdir}")
     failures: list[tuple[str, str]] = []
-    for name in INDEPENDENT:
+    for name in stages:
         if name in skip:
             print(f"  - {name}: SKIPPED")
             continue
@@ -97,13 +110,13 @@ def _sequential(cfg: Config, skip: set[str]) -> None:
         print("[mtrnafeat] pipeline complete.")
 
 
-def _parallel(cfg: Config, skip: set[str], config_path: str | None) -> None:
+def _parallel(cfg: Config, skip: set[str], config_path: str | None, stages: tuple[str, ...]) -> None:
     print(f"[mtrnafeat] running pipeline (parallel) → {cfg.outdir}")
-    n_indep = max(2, min(len(INDEPENDENT) + 1, mp.cpu_count()))
+    n_indep = max(2, min(len(stages) + 1, mp.cpu_count()))
     outdir = str(cfg.outdir)
     seed = cfg.seed
 
-    independent_to_run = [n for n in INDEPENDENT if n not in skip]
+    independent_to_run = [n for n in stages if n not in skip]
     finished: dict[str, int] = {}
     failures: list[tuple[str, int]] = []
     started = time.time()
@@ -133,9 +146,16 @@ def _parallel(cfg: Config, skip: set[str], config_path: str | None) -> None:
 def run(cfg: Config, args: list[str] | None = None) -> int:
     parsed = _parse(args)
     skip = set(parsed["skip"])
+    stages = _stages_for_config(cfg, bool(parsed["include_comparison"]))
+    if not (set(COMPARISON_STAGES) & set(stages)):
+        print(
+            "[mtrnafeat] run-all: skipping compare/substitution for independent sample run "
+            f"({len(cfg.db_files)} db_files). Use --include-comparison to force them.",
+            flush=True,
+        )
     if parsed["parallel"]:
         config_path = os.environ.get("MTRNAFEAT_CONFIG_PATH")
-        _parallel(cfg, skip, config_path)
+        _parallel(cfg, skip, config_path, stages)
     else:
-        _sequential(cfg, skip)
+        _sequential(cfg, skip, stages)
     return 0

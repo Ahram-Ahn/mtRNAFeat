@@ -22,7 +22,7 @@ from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
 from mtrnafeat.core.projection import project_structure_to_window
 from mtrnafeat.core.structure import paired_fraction
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample
 from mtrnafeat.io.db_parser import parse_db
 
 
@@ -31,13 +31,14 @@ def tis_table(cfg: Config, upstream_nt: int = 50, downstream_nt: int = 50) -> pd
     for species, fname in cfg.db_files.items():
         path = cfg.data_dir / fname
         rec_by_gene = {r.gene: r for r in parse_db(path)}
-        for gene in cfg.target_genes:
+        genes = tuple(cfg.target_genes) or tuple(rec_by_gene)
+        for gene in genes:
             gene_canon = canonical_gene(gene)
             if gene_canon not in rec_by_gene:
                 continue
             rec = rec_by_gene[gene_canon]
             try:
-                annot = annotation_for(species, gene)
+                annot = annotation_for_sample(species, gene, cfg.sample_annotation_species)
             except KeyError:
                 continue
             l_utr5 = int(annot.get("l_utr5", 0))

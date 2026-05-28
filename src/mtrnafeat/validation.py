@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from mtrnafeat.config import Config, load_config
-from mtrnafeat.io.annotations import annotation_df
+from mtrnafeat.io.annotations import annotation_df, infer_annotation_species
 
 Level = Literal["OK", "WARN", "ERROR", "OPTIONAL"]
 _ALPHABET = set("ACGU")
@@ -159,14 +159,26 @@ def check_annotations(cfg: Config) -> list[ValidationIssue]:
         if not path.exists():
             # already reported by check_db_file
             continue
+        annotation_species = infer_annotation_species(
+            species, getattr(cfg, "sample_annotation_species", None) or {}
+        )
+        if annotation_species is None:
+            issues.append(
+                ValidationIssue(
+                    "WARN",
+                    f"annotation:{species}",
+                    f"No bundled annotation mapping for sample {species!r}",
+                )
+            )
+            continue
         try:
-            ann = annotation_df(species)
+            ann = annotation_df(annotation_species)
         except ValueError:
             issues.append(
                 ValidationIssue(
                     "WARN",
                     f"annotation:{species}",
-                    f"No bundled annotation for species {species!r}",
+                    f"No bundled annotation for species {annotation_species!r}",
                 )
             )
             continue

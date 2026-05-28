@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from mtrnafeat.viz.samples import ordered_samples
 from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
 
 _SPECIES_ORDER = ["Human", "Yeast"]
@@ -119,9 +120,7 @@ def tis_zoom_panel(df_tis: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path
     # surfaces missing values explicitly with an "n/a" annotation rather
     # than silently dropping the gene.
     df = df.dropna(subset=["DMS_TIS_Energy", "Vienna_TIS_MFE"], how="all")
-    species_present = [s for s in _SPECIES_ORDER if s in df["Species"].unique()]
-    if not species_present:
-        species_present = sorted(df["Species"].unique())
+    species_present = ordered_samples(df["Species"].unique())
     n = len(species_present)
     fig, axes = plt.subplots(1, n, figsize=(7.4 * n, 6.4), sharey=True)
     if n == 1:

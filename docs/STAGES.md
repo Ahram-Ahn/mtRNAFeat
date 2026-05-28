@@ -128,10 +128,27 @@ plus all `db_files` for the experimental overlay.
 **Writes**:
 - `landscape/specific_conditions.csv`
 - `landscape/gc_gradient.csv`
+- `landscape/gc_gradient_biased.csv`
+- `landscape/gc_gradient_biased_heavy.csv`
 - `landscape/experimental_overlay.csv`
+- `landscape/experimental_overlay_regions.csv` (when sample labels map
+  to bundled Human/Yeast annotations)
 - `landscape/landscape_overlay.{svg|png}`
+- `landscape/landscape_overlay_{sample}.{svg|png}`
+- `landscape/landscape_overlay_{yeast_sample}_regions.{svg|png}` —
+  region-level 5'UTR / CDS / 3'UTR DMS points for yeast-annotated samples.
 - `landscape/gc_gradient_curves.{svg|png}`
 - `landscape/pairing_bias_{GC,AU,GU}.{svg|png}`
+- `landscape/pairing_bias_{GC,AU}_{sample}.{svg|png}`
+- `landscape/paired_nt_fractions_{sample}.{svg|png}`
+- `landscape/nucleotide_bias_{sample}.{svg|png}`
+
+**ΔG provenance.** The `.db` header energy is not used for the
+experimental overlay. `experimental_overlay.csv` stores `Header_MFE`
+separately, while `MFE` is recomputed de novo by ViennaRNA
+`eval_structure(sequence, dot_bracket)`. Region overlays likewise
+project each DMS dot-bracket to 5'UTR / CDS / 3'UTR windows and evaluate
+that projected structure de novo.
 
 **Flags**: none.
 
@@ -481,9 +498,9 @@ projected `.db` dot-bracket) to Vienna MFE on the same window.
   whether a row represents a full ±50 context or a truncated one.
 
 **Plot conventions** (the figure is designed to be read on its own):
-- Bars whose 5'UTR is shorter than 50 nt are **hatched** — upstream
-  context is truncated and the value is not directly comparable to
-  full-context bars.
+- Gene labels whose 5'UTR is shorter than the requested upstream window
+  get a `*` suffix — upstream context is truncated and the value is not
+  directly comparable to full-context bars.
 - A `ΔG = 0` value is rendered as a small open-diamond marker plus the
   literal label `0` so it cannot be confused with missing data (the
   projected DMS structure has zero pairs in the window — a real
@@ -730,14 +747,21 @@ invocation. Stages have no cross-stage data dependencies, so
 `--parallel` simply fires all of them concurrently as subprocesses
 (pool size = `min(len(stages) + 1, cpu_count())`).
 
-**Stages run** (in order, sequential mode; matches `INDEPENDENT` in
+**Sample stages run** (in order, sequential mode; matches `SAMPLE_STAGES` in
 [src/mtrnafeat/commands/pipeline.py](../src/mtrnafeat/commands/pipeline.py)):
 
 `stats`, `landscape`, `features`, `window`, `local_probability`,
-`structure_deviation`, `tis`, `compare`, `substitution`, `cofold`,
-`gene_panel`.
+`structure_deviation`, `tis`, `cofold`, `gene_panel`.
 
-**Stages NOT run**: `significance` (legacy thermodynamic-null QC —
+When `db_files` is exactly the default two-label pair `{Human, Yeast}`,
+`run-all` also runs the comparison stages `compare` and `substitution`.
+For arbitrary multi-sample configs (for example yeast knockouts plus
+human treatments), `run-all` skips those comparison stages by default
+and runs only independent per-sample analyses. Pass
+`--include-comparison` after the literal `--` only when the current
+config really supplies the required pairwise inputs.
+
+**Stages NOT run by default**: `significance` (legacy thermodynamic-null QC —
 `structure-deviation` now covers the biological interpretation;
 invoke `mtrnafeat significance ... -- --scan` explicitly when you
 want it), `kinetic` (opt-in only — requires DrTransformer on PATH),
@@ -750,27 +774,29 @@ want it), `kinetic` (opt-in only — requires DrTransformer on PATH),
 | Flag | Effect |
 |------|--------|
 | `--parallel` | fire stages concurrently in subprocesses (pool sized by `cpu_count()`). |
-| `--skip a,b,c` | comma-separated stage names to skip (use the underscore form for `local_probability` and `gene_panel`, e.g. `--skip kinetic,local_probability`). |
+| `--include-comparison` | also run `compare` and `substitution` even for non-default sample labels. |
+| `--skip a,b,c` | comma-separated stage names to skip (use the underscore form for `local_probability` and `gene_panel`, e.g. `--skip local_probability,cofold`). |
 
 **Examples**:
 ```bash
 mtrnafeat run-all --config configs/all.yaml --outdir runs/all
-mtrnafeat run-all --parallel --config configs/all.yaml --outdir runs/all
-mtrnafeat run-all --parallel --skip significance,cofold --config configs/all.yaml --outdir runs/x
+mtrnafeat run-all --config configs/all.yaml --outdir runs/all -- --parallel
+mtrnafeat run-all --config configs/multi-sample.yaml --outdir runs/x -- --parallel
+mtrnafeat run-all --config configs/multi-sample.yaml --outdir runs/x -- --parallel --skip cofold
+mtrnafeat run-all --config configs/all.yaml --outdir runs/all -- --parallel --include-comparison
 
-# Smoke run on the bundled fixtures (Vienna engine, --skip kinetic just
-# matches what examples/01_smoke_mini.sh does):
-mtrnafeat run-all --config test_data/mini.config.yaml --outdir runs/smoke -- --skip kinetic
+# Smoke run on the bundled fixtures (Vienna engine):
+mtrnafeat run-all --config test_data/mini.config.yaml --outdir runs/smoke
 ```
 
 ---
 
 ## Adapting to a new dataset
 
-The pipeline is tightly coupled to the bundled mt-mRNA gene set (Human +
-Yeast). Adding a new organism, transcript class, or `.db` file requires
-the following touch points — none are CLI flags today; all are
-config + small code edits:
+The pipeline can analyze arbitrary independent `.db` samples with a YAML
+config change. Adding a new sample usually does not require code edits.
+Use code changes only when you need new bundled annotation tables for a
+new organism.
 
 1. **Convert your input to the 3-line `.db` format.** Every stage reads
    the same parser (`src/mtrnafeat/io/db_parser.py`):
@@ -783,38 +809,30 @@ config + small code edits:
    ignored at runtime — every ΔG is recomputed via Vienna `eval_structure`,
    so any non-zero placeholder is fine.
 
-2. **Register the gene name** in
-   [`src/mtrnafeat/constants.py`](../src/mtrnafeat/constants.py) by
-   appending to `EXPECTED_GENES`. If your gene name uses `/` or other
-   path-unsafe characters, also add an alias to `GENE_ALIASES`.
+2. **Update the YAML** (`configs/template.yaml` or your own copy):
+   - `db_files: { <SampleName>: <new.db> }`
+   - `sample_annotation_species:` when sample labels do not contain
+     `Human` or `Yeast` but should use those bundled UTR/CDS coordinates
+   - `target_genes:` — the gene whitelist used by stages that iterate
+     over genes; leave empty only when you want every record in each
+     `.db` processed by stages that support that behavior
+   - `sim_freqs_per_species:` — leave `{}` to compute from the `.db`
+     files at runtime, or override for strand-specific composition
 
-3. **Add a transcript-architecture row** in
-   [`src/mtrnafeat/io/annotations.py`](../src/mtrnafeat/io/annotations.py)
-   (the inline `_HUMAN` / `_YEAST` DataFrames). The TIS, structure-
-   deviation, gene-panel, and substitution stages all call
-   `annotation_for(species, gene)` and will raise `KeyError` on an
-   unknown gene. Provide at minimum: `Length`, `L_5UTR`, `L_CDS`,
-   `L_3UTR`. For non-mRNA inputs (pre-tRNA, ncRNA), set `L_5UTR=0`,
-   `L_CDS=length`, `L_3UTR=0` — but be aware that CDS-relative bins
-   (`structure_deviation_early_cds_nt = 300`) and TIS context windows
-   (`tis_upstream_nt`, `tis_downstream_nt`) assume mRNA-scale lengths;
-   short transcripts will produce empty or spurious region tables.
+3. **Only add code for a new organism annotation table.** If your sample
+   is not Human or Yeast and you need UTR/CDS/TIS outputs, add an
+   annotation table in
+   [`src/mtrnafeat/io/annotations.py`](../src/mtrnafeat/io/annotations.py).
+   Without annotations, whole-transcript stages can still run, while
+   UTR/CDS-specific summaries are skipped or use whole-transcript fallback
+   coordinates where implemented.
 
-4. **Update the YAML** (`configs/template.yaml` or your own copy) with:
-   - `db_files: { <SpeciesName>: <new.db> }`
-   - `target_genes:` — the gene whitelist used by every stage's
-     `(species × target_genes)` iteration
-   - `sim_gc_conditions:` — defaults are tuned to mtDNA GC ranges
-     (7–46%); rebuild for your organism's empirical GC distribution
-   - `sim_freqs_per_species:` — leave `{}` to compute from the new
-     `.db` files at runtime, or override for strand-specific composition
-
-After (1)–(4), `mtrnafeat validate-inputs --config <new.yaml>` will
+After (1)–(3), `mtrnafeat validate-inputs --config <new.yaml>` will
 flag any remaining bracket/length mismatches before the analysis runs.
 
 ### Stage independence and ordering
 
-Every stage in `INDEPENDENT` (see
+Every sample stage in `SAMPLE_STAGES` (see
 [`src/mtrnafeat/commands/pipeline.py`](../src/mtrnafeat/commands/pipeline.py))
 reads only `cfg` + `.db` files and writes to its own subfolder under
 `cfg.outdir`. There are no cross-stage file dependencies — stages can

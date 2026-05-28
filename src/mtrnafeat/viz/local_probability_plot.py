@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     LINEWIDTH,
@@ -121,7 +121,8 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
                   tis_upstream: int = 50,
                   tis_downstream: int = 50,
                   per_window_df: pd.DataFrame | None = None,
-                  scan_window: int | None = None) -> Path:
+                  scan_window: int | None = None,
+                  sample_annotation_species: dict[str, str] | None = None) -> Path:
     apply_theme()
     if gene_df.empty:
         fig, ax = plt.subplots(figsize=(8, 3))
@@ -139,7 +140,7 @@ def plot_one_gene(gene_df: pd.DataFrame, out_path: Path,
     has_dms = _has_dms_overlay(gene_df)
 
     try:
-        annot = annotation_for(species, gene)
+        annot = annotation_for_sample(species, gene, sample_annotation_species)
     except KeyError:
         annot = None
 

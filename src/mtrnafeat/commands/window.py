@@ -20,7 +20,7 @@ import pandas as pd
 
 from mtrnafeat.analysis import window
 from mtrnafeat.config import Config
-from mtrnafeat.constants import canonical_gene, file_safe_gene
+from mtrnafeat.constants import canonical_gene, file_safe_gene, file_safe_sample
 from mtrnafeat.io.db_parser import list_genes
 from mtrnafeat.io.writers import canonical_csv
 from mtrnafeat.viz import window_plot
@@ -69,12 +69,12 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     for species, fname in cfg.db_files.items():
         path = cfg.data_dir / fname
         species_genes = set(list_genes(path))
-        configured = [canonical_gene(g) for g in cfg.target_genes]
+        configured = [canonical_gene(g) for g in cfg.target_genes] or sorted(species_genes)
         coverage[species] = {
             "found": [g for g in configured if g in species_genes],
             "missing": [g for g in configured if g not in species_genes],
         }
-        for gene in cfg.target_genes:
+        for gene in configured:
             target = canonical_gene(gene)
             if target not in species_genes:
                 print(f"[mtrnafeat] window: skip {species} {target} (not in {fname})", flush=True)
@@ -92,7 +92,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             summary_frames.append(summary_df)
             window_plot.plot_transcript_pairing(
                 res, pos_df,
-                out_path=plot_path(out, f"window_{species}_{file_safe_gene(gene)}", cfg.plot_format),
+                out_path=plot_path(out, f"window_{file_safe_sample(species)}_{file_safe_gene(gene)}", cfg.plot_format),
                 rolling_window=cfg.rolling_window,
                 dpi=cfg.dpi,
             )

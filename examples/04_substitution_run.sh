@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run only the substitution-thermo permutation test.
-# This is the most novel piece of the package — for each (species, gene),
-# the wild-type CDS is compared to N synonymous-recoding null pools under CoFold.
+# For each (species, gene), the wild-type CDS is compared to codon-aware
+# null pools under plain Vienna MFE. CoFold is handled by the separate
+# `mtrnafeat cofold` stage.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."

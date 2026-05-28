@@ -37,7 +37,7 @@ else:
 from mtrnafeat.config import Config
 from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core.structure import extract_pairs, pair_table
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 
@@ -459,7 +459,7 @@ def scan_all(cfg: Config, window: int, max_bp_span: int,
     frames = []
     for res in results:
         try:
-            annot = annotation_for(res.species, res.gene)
+            annot = annotation_for_sample(res.species, res.gene, cfg.sample_annotation_species)
         except KeyError:
             annot = None
         frames.append(per_position_table(

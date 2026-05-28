@@ -26,8 +26,10 @@ import pandas as pd
 from mtrnafeat.analysis.statistics import paired_composition, sequence_gc_pct
 from mtrnafeat.config import Config
 from mtrnafeat.core import thermo
+from mtrnafeat.core.projection import project_structure_to_window
 from mtrnafeat.core.shuffle import random_gc_sequence, random_sequence_with_freqs
 from mtrnafeat.core.structure import paired_fraction
+from mtrnafeat.io.annotations import annotation_for_sample, infer_annotation_species
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 from mtrnafeat.rng import make_rng
@@ -171,14 +173,20 @@ def experimental_overlay(cfg: Config) -> pd.DataFrame:
         path = cfg.data_dir / fname
         for rec in parse_db(path):
             length = len(rec.sequence)
+            try:
+                dms_eval = thermo.eval_structure(rec.sequence, rec.structure)
+            except Exception:
+                dms_eval = float("nan")
             gc_pair, au_pair, gu_pair = paired_composition(rec.sequence, rec.structure)
             base = _base_composition(rec.sequence)
             rows.append({
                 "Condition": f"Exp: {species} DMS",
                 "Data_Type": "Experimental",
                 "Gene": rec.gene, "Species": species, "Length": length,
-                "MFE": rec.mfe,
-                "Normalized_MFE_per_nt": rec.mfe / length if length else 0.0,
+                "MFE": dms_eval,
+                "Header_MFE": rec.mfe,
+                "MFE_Source": "Vienna eval_structure(sequence, .db dot-bracket)",
+                "Normalized_MFE_per_nt": dms_eval / length if length else 0.0,
                 "Foldedness_Pct": 100.0 * paired_fraction(rec.structure),
                 "Sequence_GC_Pct": sequence_gc_pct(rec.sequence),
                 "Paired_GC_Pct": gc_pair,
@@ -189,6 +197,75 @@ def experimental_overlay(cfg: Config) -> pd.DataFrame:
                 "Pct_G": base["G"],
                 "Pct_U": base["U"],
             })
+    return pd.DataFrame(rows)
+
+
+def experimental_overlay_regions(cfg: Config) -> pd.DataFrame:
+    """Region-level DMS points with de novo Vienna ΔG evaluation.
+
+    Rows are emitted only when a sample label can be mapped to a bundled
+    annotation species. This currently supports Human/Yeast labels directly
+    and arbitrary sample names via ``cfg.sample_annotation_species`` or the
+    Human/Yeast token inference in ``io.annotations``.
+    """
+    rows: list[dict] = []
+    mapping = getattr(cfg, "sample_annotation_species", None) or {}
+    for species, fname in cfg.db_files.items():
+        annotation_species = infer_annotation_species(species, mapping)
+        if annotation_species is None:
+            continue
+        path = cfg.data_dir / fname
+        for rec in parse_db(path):
+            try:
+                annot = annotation_for_sample(species, rec.gene, mapping)
+            except KeyError:
+                continue
+            regions = (
+                ("5'UTR", 0, int(annot["l_utr5"])),
+                ("CDS", int(annot["l_utr5"]), int(annot["l_utr5"]) + int(annot["l_cds"])),
+                (
+                    "3'UTR/tail",
+                    int(annot["l_utr5"]) + int(annot["l_cds"]),
+                    min(len(rec.sequence), int(annot["l_tr"])),
+                ),
+            )
+            for region, start, end in regions:
+                start = max(0, min(start, len(rec.sequence)))
+                end = max(start, min(end, len(rec.sequence)))
+                if end <= start:
+                    continue
+                seq_w = rec.sequence[start:end]
+                struct_w = project_structure_to_window(rec.structure, start, end)
+                try:
+                    dms_eval = thermo.eval_structure(seq_w, struct_w)
+                except Exception:
+                    dms_eval = float("nan")
+                gc_pair, au_pair, gu_pair = paired_composition(seq_w, struct_w)
+                base = _base_composition(seq_w)
+                length = len(seq_w)
+                rows.append({
+                    "Condition": f"Exp: {species} DMS {region}",
+                    "Data_Type": "Experimental",
+                    "Gene": rec.gene,
+                    "Species": species,
+                    "Annotation_Species": annotation_species,
+                    "Region": region,
+                    "Region_Start_1based": start + 1,
+                    "Region_End_1based": end,
+                    "Length": length,
+                    "MFE": dms_eval,
+                    "MFE_Source": "Vienna eval_structure(region sequence, projected .db dot-bracket)",
+                    "Normalized_MFE_per_nt": dms_eval / length if length else 0.0,
+                    "Foldedness_Pct": 100.0 * paired_fraction(struct_w),
+                    "Sequence_GC_Pct": sequence_gc_pct(seq_w),
+                    "Paired_GC_Pct": gc_pair,
+                    "Paired_AU_Pct": au_pair,
+                    "Paired_GU_Pct": gu_pair,
+                    "Pct_A": base["A"],
+                    "Pct_C": base["C"],
+                    "Pct_G": base["G"],
+                    "Pct_U": base["U"],
+                })
     return pd.DataFrame(rows)
 
 

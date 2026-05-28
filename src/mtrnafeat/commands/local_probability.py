@@ -35,9 +35,9 @@ import pandas as pd
 
 from mtrnafeat.analysis import local_probability
 from mtrnafeat.config import Config
-from mtrnafeat.constants import file_safe_gene
+from mtrnafeat.constants import file_safe_gene, file_safe_sample
 from mtrnafeat.core.stats import bh_fdr
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample
 from mtrnafeat.io.writers import canonical_csv
 from mtrnafeat.rng import make_rng
 from mtrnafeat.viz import local_probability_plot
@@ -142,7 +142,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
     primary_pair = (int(tis_upstream), int(tis_downstream))
     for res in results:
         try:
-            annot = annotation_for(res.species, res.gene)
+            annot = annotation_for_sample(res.species, res.gene, cfg.sample_annotation_species)
         except KeyError:
             annot = None
         win_df = local_probability.per_window_agreement_table(
@@ -202,7 +202,7 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             gene_df.reset_index(drop=True),
             out_path=plot_path(
                 out,
-                f"local_probability_{res.species}_{file_safe_gene(res.gene)}",
+                f"local_probability_{file_safe_sample(res.species)}_{file_safe_gene(res.gene)}",
                 cfg.plot_format,
             ),
             smooth_window=smooth,
@@ -211,5 +211,6 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
             tis_downstream=tis_downstream,
             per_window_df=per_window_all,
             scan_window=scan_window,
+            sample_annotation_species=cfg.sample_annotation_species,
         )
     return 0

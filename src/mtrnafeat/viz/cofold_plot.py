@@ -20,6 +20,7 @@ Outputs:
 from __future__ import annotations
 
 import math
+import string
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -27,6 +28,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from mtrnafeat.constants import file_safe_sample
+from mtrnafeat.viz.samples import ordered_samples
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     TICK_FONTSIZE,
@@ -127,14 +130,12 @@ def gap_closure_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
     taus = sorted(df["tau"].unique())
     cmap = sns.color_palette("cividis", len(taus))
 
-    species_present = [s for s in _SPECIES_ORDER if s in df["Species"].unique()]
-    if not species_present:
-        species_present = sorted(df["Species"].unique())
+    species_present = ordered_samples(df["Species"].unique())
 
     n_sp = len(species_present)
     fig, axes = plt.subplots(1, n_sp, figsize=(5.5 * n_sp, 4.6), squeeze=False)
 
-    for ax, sp, letter in zip(axes[0], species_present, "AB", strict=True):
+    for ax, sp, letter in zip(axes[0], species_present, string.ascii_uppercase[:n_sp], strict=True):
         _draw_closure_panel(ax, df[df["Species"] == sp], sp, taus, cmap)
         panel_label(ax, letter)
 
@@ -214,9 +215,7 @@ def gap_heatmap_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
 
     apply_theme()
 
-    species_present = [s for s in _SPECIES_ORDER if s in full["Species"].unique()]
-    if not species_present:
-        species_present = sorted(full["Species"].unique())
+    species_present = ordered_samples(full["Species"].unique())
 
     n_sp = len(species_present)
     fig, axes = plt.subplots(1, n_sp, figsize=(4.5 * n_sp, 3.8), squeeze=False)
@@ -231,7 +230,7 @@ def gap_heatmap_panels(full: pd.DataFrame, out_dir: Path, plot_format: str,
     vmax = pivot_all["Abs_Gap"].max()
 
     im = None
-    for ax, sp, letter in zip(axes[0], species_present, "AB", strict=True):
+    for ax, sp, letter in zip(axes[0], species_present, string.ascii_uppercase[:n_sp], strict=True):
         sub = pivot_all[pivot_all["Species"] == sp]
         pivot = sub.pivot(index="tau", columns="alpha", values="Abs_Gap")
         pivot = pivot.iloc[::-1]
@@ -286,9 +285,7 @@ def per_gene_landscape(full: pd.DataFrame, out_dir: Path, plot_format: str,
     vmin = float(df_clean["Abs_Gap"].min())
     vmax = float(df_clean["Abs_Gap"].max())
 
-    species_present = [s for s in _SPECIES_ORDER if s in df_clean["Species"].unique()]
-    if not species_present:
-        species_present = sorted(df_clean["Species"].unique())
+    species_present = ordered_samples(df_clean["Species"].unique())
 
     paths: list[Path] = []
     for sp in species_present:
@@ -329,7 +326,7 @@ def per_gene_landscape(full: pd.DataFrame, out_dir: Path, plot_format: str,
             cbar.set_label("|CoFold − DMS| ΔG  (kcal/mol)", fontsize=TICK_FONTSIZE)
             cbar.ax.tick_params(labelsize=TICK_FONTSIZE)
 
-        out_path = out_dir / f"cofold_parameter_landscape_{sp.lower()}.{fmt}"
+        out_path = out_dir / f"cofold_parameter_landscape_{file_safe_sample(sp).lower()}.{fmt}"
         fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
         plt.close(fig)
         paths.append(out_path)

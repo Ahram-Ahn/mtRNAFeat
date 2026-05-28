@@ -13,7 +13,7 @@ from mtrnafeat.constants import canonical_gene
 from mtrnafeat.core import thermo
 from mtrnafeat.core.shuffle import random_sequence_with_freqs
 from mtrnafeat.core.structure import extract_pairs, parse_element_sizes
-from mtrnafeat.io.annotations import annotation_for, classify_region
+from mtrnafeat.io.annotations import annotation_for_sample, classify_region
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 from mtrnafeat.rng import make_rng
@@ -112,7 +112,7 @@ def region_stratified_elements(cfg: Config) -> pd.DataFrame:
         path = cfg.data_dir / fname
         for rec in parse_db(path):
             try:
-                annot = annotation_for(species, rec.gene)
+                annot = annotation_for_sample(species, rec.gene, cfg.sample_annotation_species)
             except KeyError:
                 continue
             elements = parse_element_sizes(rec.structure, cfg.max_loop_artifact_size)

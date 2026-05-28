@@ -16,6 +16,11 @@ class Config:
     db_files: dict[str, str] = field(
         default_factory=lambda: {"Human": "human_mt-mRNA_all.db", "Yeast": "yeast_mt-mRNA_all.db"}
     )
+    # Optional mapping from arbitrary sample labels in db_files to bundled
+    # annotation tables, e.g. {Yeast_KO1: Yeast, Human_CAP: Human}. If omitted,
+    # annotation-aware stages infer Human/Yeast from the sample label when
+    # possible and otherwise skip UTR/CDS-specific summaries.
+    sample_annotation_species: dict[str, str] = field(default_factory=dict)
     alignment_file: str = "PAL2NL_aa-dna_alignment_yeast_human.txt"
 
     # Determinism
@@ -253,6 +258,12 @@ class Config:
 
         # Engines
         _choice("fold_engine", self.fold_engine, ("rnastructure", "vienna"))
+        for sample, annot_species in self.sample_annotation_species.items():
+            _choice(
+                f"sample_annotation_species[{sample}]",
+                annot_species,
+                ("Human", "Yeast"),
+            )
 
         # Substitution
         _gt("substitution_n_simulations", self.substitution_n_simulations, 0)

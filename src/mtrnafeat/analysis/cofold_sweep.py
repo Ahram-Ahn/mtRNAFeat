@@ -165,7 +165,8 @@ def run_cofold_sweep(cfg: Config, do_window_corr: bool = True
     jobs: list[_GeneJob] = []
     for species, fname in cfg.db_files.items():
         rec_by_gene = {r.gene: r for r in parse_db(cfg.data_dir / fname)}
-        for gene in cfg.target_genes:
+        genes = tuple(cfg.target_genes) or tuple(rec_by_gene)
+        for gene in genes:
             target = canonical_gene(gene)
             if target not in rec_by_gene:
                 continue

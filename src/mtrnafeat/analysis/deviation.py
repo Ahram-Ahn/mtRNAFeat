@@ -47,7 +47,7 @@ from mtrnafeat.core import thermo
 from mtrnafeat.core.shuffle import dinuc_shuffle
 from mtrnafeat.core.stats import bh_fdr
 from mtrnafeat.core.structure import extract_pairs
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample
 from mtrnafeat.io.db_parser import parse_db
 from mtrnafeat.progress import progress, step
 from mtrnafeat.rng import make_rng
@@ -728,7 +728,7 @@ def scan_all(cfg: Config) -> dict:
                 if (not targets or canonical_gene(r.gene) in targets)]
         for rec in progress(recs, desc=f"{species} deviation", unit="gene"):
             try:
-                annot = annotation_for(species, rec.gene)
+                annot = annotation_for_sample(species, rec.gene, cfg.sample_annotation_species)
             except KeyError:
                 annot = None
             result = compute_one_gene(

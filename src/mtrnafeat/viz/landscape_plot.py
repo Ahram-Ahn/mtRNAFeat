@@ -9,6 +9,7 @@ Publication aesthetics:
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ import seaborn as sns
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
+from mtrnafeat.viz.samples import ordered_samples, sample_color, sample_palette
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     LINEWIDTH,
@@ -38,19 +40,25 @@ def landscape_overlay(sim_df, exp_df, out_path: Path, dpi: int = 300) -> Path:
     distinct contour outlines so the empirical cloud stays the visual focus.
     """
     apply_theme()
-    species_list = ["Human", "Yeast"]
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
-    for ax, letter in zip(axes, ("A", "B"), strict=True):
+    species_list = ordered_samples(exp_df["Species"].unique())
+    n_sp = max(len(species_list), 1)
+    cols = min(3, n_sp)
+    rows = math.ceil(n_sp / cols)
+    fig, axes_grid = plt.subplots(rows, cols, figsize=(7.6 * cols, 6.3 * rows), sharey=True, squeeze=False)
+    axes = list(axes_grid.flat)
+    for ax in axes[n_sp:]:
+        ax.axis("off")
+    for ax, letter in zip(axes[:n_sp], "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:n_sp], strict=True):
         panel_label(ax, letter)
 
-    species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
+    species_palette = sample_palette(species_list)
     # Distinct hues for filled overlapping KDEs. Empirical = blue (primary),
     # symmetric-GC references in warm/contrasting hues so overlaps remain
     # readable. Alpha kept moderate so blended regions still show through.
     empirical_fill = "#3B7FB7"          # saturated blue
     ref_fill_palette = ["#E68A2E", "#7E57C2", "#3CA46B"]  # orange / purple / green
 
-    for ax, species in zip(axes, species_list, strict=True):
+    for ax, species in zip(axes[:n_sp], species_list, strict=True):
         sp_mask = sim_df["Condition"].str.startswith(f"Sim {species}")
         sp_sim = sim_df[sp_mask]
         conditions = list(sp_sim["Condition"].unique())
@@ -167,7 +175,7 @@ def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
     7% GC for yeast 5'UTR, 30% GC for yeast CDS, 46% GC for human).
     """
     apply_theme()
-    species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
+    species_palette = sample_palette([species])
 
     sim_sub = sim_df[sim_df["Species"] == species]
     sim_conditions = list(sim_sub["Condition"].unique())
@@ -247,6 +255,73 @@ def landscape_overlay_one(sim_df, exp_df, out_path: Path, species: str,
     return Path(out_path)
 
 
+def landscape_overlay_regions(sim_df, region_df, out_path: Path, species: str,
+                               dpi: int = 300) -> Path:
+    """Single-sample overlay with yeast 5'UTR/CDS/3'UTR points separated."""
+    apply_theme()
+    sim_sub = sim_df[sim_df["Species"] == species]
+    exp_sub = region_df[region_df["Species"] == species]
+    if exp_sub.empty:
+        return Path(out_path)
+
+    fig, ax = plt.subplots(figsize=(8.6, 6.4))
+    handles: list = []
+    labels: list[str] = []
+
+    if not sim_sub.empty:
+        try:
+            sns.kdeplot(
+                data=sim_sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                ax=ax, fill=True, alpha=0.45, color="#3B7FB7",
+                levels=6, thresh=0.05, warn_singular=False,
+            )
+        except Exception:
+            sns.scatterplot(
+                data=sim_sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+                ax=ax, color="#3B7FB7", alpha=0.35, s=12,
+            )
+        handles.append(Patch(facecolor="#3B7FB7", alpha=0.50, label="Simulated sample null"))
+        labels.append("Simulated sample null")
+
+    region_colors = {"5'UTR": "#7570B3", "CDS": "#1B9E77", "3'UTR/tail": "#D95F02"}
+    region_markers = {"5'UTR": "^", "CDS": "o", "3'UTR/tail": "s"}
+    for region in ("5'UTR", "CDS", "3'UTR/tail"):
+        sub = exp_sub[exp_sub["Region"] == region]
+        if sub.empty:
+            continue
+        color = region_colors[region]
+        marker = region_markers[region]
+        sns.scatterplot(
+            data=sub, x="Normalized_MFE_per_nt", y="Foldedness_Pct",
+            ax=ax, color=color, marker=marker, s=120,
+            edgecolor="black", linewidth=1.1, zorder=5,
+        )
+        repel_labels(
+            ax,
+            xs=sub["Normalized_MFE_per_nt"].values,
+            ys=sub["Foldedness_Pct"].values,
+            labels=[f"{g} {region}" for g in sub["Gene"].values],
+            color=color, fontsize=7, k=28,
+        )
+        handles.append(Line2D([0], [0], marker=marker, color="w",
+                              markerfacecolor=color, markeredgecolor="black",
+                              markersize=9, label=region))
+        labels.append(region)
+
+    ax.set_title(f"{species} — DMS regions vs simulated null",
+                 fontsize=TITLE_FONTSIZE, pad=10)
+    ax.set_xlabel(r"Normalized de novo DMS ΔG  (kcal/mol per nt)", fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel("Structured percentage (%)", fontsize=LABEL_FONTSIZE)
+    ax.margins(x=0.12, y=0.18)
+    style_axis(ax)
+    legend_outside(ax, handles=handles, labels=labels,
+                   position="right", fontsize=9, frameon=True, framealpha=0.9)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return Path(out_path)
+
+
 _BASE_BIAS_COLORS = {
     "A": "#2ca02c",
     "C": "#1f77b4",
@@ -270,8 +345,7 @@ def per_base_composition_bias(biased_gradient_df, exp_df, out_path: Path,
     a single column and threw away the GC-axis signal).
     """
     apply_theme()
-    species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
-    exp_color = species_palette.get(species, "#333333")
+    exp_color = sample_color(species)
 
     bg = biased_gradient_df[biased_gradient_df.get("Species", "") == species]
     exp_sub = exp_df[exp_df["Species"] == species]
@@ -362,8 +436,7 @@ def paired_nt_fractions(symmetric_gradient_df, biased_gradient_df, exp_df,
     same overall GC%.
     """
     apply_theme()
-    species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
-    exp_color = species_palette.get(species, "#333333")
+    exp_color = sample_color(species)
 
     sym_df = _add_paired_nt_columns(symmetric_gradient_df)
     bias_df = _add_paired_nt_columns(biased_gradient_df)
@@ -461,8 +534,8 @@ def paired_nt_fractions(symmetric_gradient_df, biased_gradient_df, exp_df,
         Line2D([0], [0], marker="o", color="w", markerfacecolor=exp_color,
                markersize=10, markeredgecolor="black", label=f"Exp: {species}"),
     ]
-    axes[0].legend(handles=legend_handles, loc="lower left",
-                   frameon=True, framealpha=0.92, fontsize=9, borderaxespad=0.6)
+    legend_outside(axes[-1], handles=legend_handles, labels=[h.get_label() for h in legend_handles],
+                   position="right", frameon=True, framealpha=0.92, fontsize=9)
 
     fig.suptitle(
         f"{species} — H-strand bias reduces foldedness via composition ceilings\n{subtitle}",
@@ -487,8 +560,7 @@ def pairing_bias_species(biased_gradient_df, exp_df, out_path: Path, species: st
     visible. Title carries the actual ratio values used.
     """
     apply_theme()
-    species_palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
-    exp_color = species_palette.get(species, "#333333")
+    exp_color = sample_color(species)
 
     bg = biased_gradient_df[biased_gradient_df.get("Species", "") == species]
     exp_sub = exp_df[exp_df["Species"] == species]
@@ -577,13 +649,13 @@ def pairing_bias(gradient_df, exp_df, out_path: Path, y_col: str, ylabel: str,
                  color="#333333", errorbar="sd", linewidth=LINEWIDTH)
     if include_yx_line:
         ax.plot([0, 100], [0, 100], color="black", linestyle=":", alpha=0.35)
-    palette = {"Human": "#D62728", "Yeast": "#FF7F0E"}
+    palette = sample_palette(exp_df["Species"].unique())
     handles = [Line2D([0], [0], color="#333333", linewidth=LINEWIDTH,
                        label="Symmetric baseline (G=C, A=U)")]
     if include_yx_line:
         handles.append(Line2D([0], [0], color="black", linestyle=":", alpha=0.6,
                                 label="y = x"))
-    for sp in ("Human", "Yeast"):
+    for sp in ordered_samples(exp_df["Species"].unique()):
         sub = exp_df[exp_df["Species"] == sp]
         if sub.empty:
             continue

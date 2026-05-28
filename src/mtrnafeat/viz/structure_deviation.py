@@ -27,7 +27,8 @@ import pandas as pd
 from matplotlib.patches import Rectangle
 
 from mtrnafeat.analysis.deviation import DeviationResult
-from mtrnafeat.io.annotations import annotation_for
+from mtrnafeat.io.annotations import annotation_for_sample
+from mtrnafeat.viz.samples import ordered_samples
 from mtrnafeat.viz.style import (
     LABEL_FONTSIZE,
     LINEWIDTH,
@@ -114,7 +115,7 @@ def plot_one_gene(result: DeviationResult,
     n = len(result.sequence)
     species, gene = result.species, result.gene
     try:
-        annot = annotation_for(species, gene)
+        annot = annotation_for_sample(species, gene, getattr(cfg, "sample_annotation_species", None))
     except KeyError:
         annot = None
 
@@ -361,18 +362,19 @@ def plot_heatmap(matrix_df: pd.DataFrame, out_path: Path,
     if matrix_df.empty:
         return None
     df = matrix_df.copy()
-    df["Row_Label"] = df["Species"] + " " + df["Gene"]
+    df["Row_Label"] = df["Species"].astype(str) + " | " + df["Gene"].astype(str)
     pivot = df.pivot_table(
         index="Row_Label", columns="Region_Bin", values=value, aggfunc="mean"
     )
     cols = [b for b in _BIN_ORDER if b in pivot.columns]
     pivot = pivot[cols]
-    # Sort rows: yeast first then human, alphabetically within species
-    species_rank = {"Yeast": 0, "Human": 1}
+    species_rank = {sp: i for i, sp in enumerate(ordered_samples(df["Species"].unique()))}
     pivot = pivot.reindex(sorted(
         pivot.index,
-        key=lambda r: (species_rank.get(r.split(" ", 1)[0], 99),
-                       r.split(" ", 1)[1] if " " in r else r),
+        key=lambda r: (
+            species_rank.get(r.split(" | ", 1)[0], 99),
+            r.split(" | ", 1)[1] if " | " in r else r,
+        ),
     ))
 
     n_rows, n_cols = pivot.shape

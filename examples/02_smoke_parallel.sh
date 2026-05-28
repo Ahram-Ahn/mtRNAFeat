@@ -14,7 +14,7 @@ mkdir -p "$OUTDIR"
 
 echo "[smoke-parallel] parallel run → $OUTDIR"
 mtrnafeat run-all --config test_data/mini.config.yaml --outdir "$OUTDIR" \
-       -- --parallel --skip kinetic
+       -- --parallel
 
 echo
 echo "[smoke-parallel] outputs:"

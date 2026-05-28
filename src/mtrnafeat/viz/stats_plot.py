@@ -7,9 +7,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from mtrnafeat.viz.samples import sample_palette
 from mtrnafeat.viz.style import LABEL_FONTSIZE, TITLE_FONTSIZE, apply_theme, style_axis
-
-_SPECIES_PALETTE = {"Human": "#D62728", "Yeast": "#FF7F0E"}
 
 
 def boxplot_per_species(df_stats: pd.DataFrame, out_path: Path, dpi: int = 300) -> Path:
@@ -54,9 +53,10 @@ def boxplot_per_species(df_stats: pd.DataFrame, out_path: Path, dpi: int = 300) 
     nrows = (n + ncols - 1) // ncols
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.0 * ncols, 4.0 * nrows), squeeze=False)
     axes_flat = axes.flatten()
+    palette = sample_palette(df_stats["Species"].unique())
     for ax, (col, label) in zip(axes_flat, metrics, strict=True):
         sns.boxplot(data=df_stats, x="Species", y=col, ax=ax,
-                    hue="Species", palette=_SPECIES_PALETTE, width=0.55,
+                    hue="Species", palette=palette, width=0.55,
                     fliersize=3, linewidth=1.4, legend=False)
         sns.stripplot(data=df_stats, x="Species", y=col, ax=ax,
                        color="black", size=3, alpha=0.55, jitter=0.2)

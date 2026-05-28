@@ -73,3 +73,10 @@ def db_gene(name: str) -> str:
 def file_safe_gene(name: str) -> str:
     """Canonical gene name with path separators replaced for safe filenames."""
     return canonical_gene(name).replace("/", "_")
+
+
+def file_safe_sample(name: str) -> str:
+    """Sample/species label normalized for output filenames."""
+    safe = str(name).strip().replace("/", "_").replace("\\", "_")
+    safe = "_".join(safe.split())
+    return safe or "sample"

@@ -19,6 +19,26 @@ algorithm, or a validated co-transcriptional folding simulator for long
 mRNAs. See [What mtrnafeat is not](#what-mtrnafeat-is-not) for the
 boundary.
 
+## If you only read one thing
+
+Use [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) as the runbook.
+It covers what to prepare, `.db` formatting, single-sample and
+multi-sample YAML examples, validation commands, and which output files
+to inspect first.
+
+Minimal path:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+cp configs/template.yaml configs/my-run.yaml
+# edit data_dir, db_files, sample_annotation_species, target_genes
+mtrnafeat doctor --config configs/my-run.yaml
+mtrnafeat validate-inputs --config configs/my-run.yaml
+mtrnafeat run-all --config configs/my-run.yaml --outdir runs/my-run -- --parallel
+```
+
 ## Features
 
 The pipeline ships **11 analysis stages** plus orchestration (`run-all`),
@@ -42,7 +62,7 @@ deep dive.
 - **gene-panel** — per-gene composition + paired-pair + local-foldedness panel with a 5'UTR / CDS / 3'UTR architecture strip.
 - **kinetic** — DrTransformer kinetic folding (opt-in; never auto-runs).
 - **plot** — re-render `landscape` or `features` plots from cached CSVs.
-- **run-all** — orchestrate every independent stage; supports `--parallel` and `--skip stage1,stage2`.
+- **run-all** — orchestrate every independent stage; supports `--parallel` and `--skip stage1,stage2`. With arbitrary multi-sample configs it skips `compare` and `substitution` unless `--include-comparison` is passed.
 
 ## Requirements
 
@@ -151,12 +171,47 @@ mtrnafeat significance --config configs/all.yaml --outdir runs/sig -- --scan --m
 ### 3. Full pipeline (all stages, both species)
 
 ```bash
-mtrnafeat run-all --parallel --config configs/all.yaml --outdir runs/all
+mtrnafeat run-all --config configs/all.yaml --outdir runs/all -- --parallel
 ```
 
 Wall time: 30–60 min in parallel mode on a recent laptop.
 
-### 4. Scoping to one gene
+### 4. Multi-sample independent analysis
+
+For a design such as four yeast knockouts plus two human treatments,
+give each sample its own `.db` file and label in `db_files`. The sample
+labels can be arbitrary; map them to bundled Human/Yeast annotations
+when you want TIS/UTR/CDS-aware outputs.
+
+```yaml
+data_dir: data/my_experiment
+db_files:
+  Yeast_WT: yeast_wt.db
+  Yeast_KO1: yeast_ko1.db
+  Yeast_KO2: yeast_ko2.db
+  Yeast_KO3: yeast_ko3.db
+  Human_Control: human_control.db
+  Human_CAP: human_chloramphenicol.db
+sample_annotation_species:
+  Yeast_WT: Yeast
+  Yeast_KO1: Yeast
+  Yeast_KO2: Yeast
+  Yeast_KO3: Yeast
+  Human_Control: Human
+  Human_CAP: Human
+fold_engine: vienna
+```
+
+```bash
+mtrnafeat run-all --config configs/my-experiment.yaml --outdir runs/my-experiment -- --parallel
+```
+
+For this config, `run-all` performs the independent sample stages
+(`landscape`, `local-probability`, `structure-deviation`, `gene-panel`,
+`tis`, `window`, `features`, `cofold`, plus `stats`) and skips
+`compare`/`substitution` by default.
+
+### 5. Scoping to one gene
 
 Override `target_genes` in the YAML to scope a quick exploratory run:
 
@@ -246,13 +301,13 @@ constraints is still a model.
 | [gene-panel](docs/STAGES.md#gene-panel) | per-gene composition + architecture | `gene_panels/panel_{species}_{gene}.svg` |
 | [kinetic](docs/STAGES.md#kinetic) | DrTransformer kinetic folding (opt-in) | `kinetic/kinetic_summary.csv`, per-gene trajectory plots |
 | [plot](docs/STAGES.md#plot) | re-render `landscape` / `features` plots | (stage-specific, no recomputation) |
-| [run-all](docs/STAGES.md#run-all) | orchestrate every analysis stage | every output above except `kinetic` |
+| [run-all](docs/STAGES.md#run-all) | orchestrate sample stages; comparison stages only for the default Human/Yeast pair or `--include-comparison` | standard per-sample outputs above except `significance`, `kinetic`, and `plot` |
 
 ## Inputs
 
 The pipeline reads three kinds of files from `cfg.data_dir` (default `data/`):
 
-**`.db` files** (per species). Three-line records:
+**`.db` files** (per sample/species). Three-line records:
 
 ```
 >COX1: -150.4 kcal/mol
@@ -263,6 +318,10 @@ GUAGCUAUCAGCAUC...
 Header line, RNA sequence, dot-bracket structure. One record per gene.
 Default filenames: `human_mt-mRNA_all.db`, `yeast_mt-mRNA_all.db` —
 override via `db_files` in the config.
+
+The `.db` header energy is preserved as metadata but is not authoritative
+for thermodynamic comparisons. Stages that need DMS ΔG recompute it from
+the sequence and dot-bracket using ViennaRNA `eval_structure`.
 
 **Codon-aligned alignment** (PAL2NL format) for the `compare` stage.
 Default: `PAL2NL_aa-dna_alignment_yeast_human.txt`. Optional — `compare`
@@ -369,6 +428,7 @@ ruff check src tests                     # lint
 
 ## Documentation
 
+- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — practical runbook: what to prepare, config examples, commands, outputs.
 - [docs/STAGES.md](docs/STAGES.md) — every subcommand: purpose, I/O, flags, notes.
 - [docs/CONFIG.md](docs/CONFIG.md) — every YAML config field explained.
 - [docs/FIGURES.md](docs/FIGURES.md) — every figure output: what is plotted, how to read each axis, source CSV.

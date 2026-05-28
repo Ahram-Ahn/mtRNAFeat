@@ -53,6 +53,47 @@ def annotation_for(species: str, gene: str) -> dict[str, int]:
     }
 
 
+def infer_annotation_species(sample: str, overrides: dict[str, str] | None = None) -> str | None:
+    """Infer the bundled annotation species for an arbitrary sample label.
+
+    Exact overrides win. Otherwise labels containing common human/yeast tokens
+    map to the bundled Human/Yeast tables. Unknown labels return ``None`` so
+    callers can skip annotation-specific outputs or fall back to whole-transcript
+    coordinates.
+    """
+    overrides = overrides or {}
+    if sample in overrides:
+        return overrides[sample]
+    s = sample.lower()
+    if any(token in s for token in ("human", "homo", "hsapiens", "h_sapiens")):
+        return "Human"
+    if any(token in s for token in ("yeast", "saccharomyces", "scerevisiae", "s_cerevisiae")):
+        return "Yeast"
+    if s in {"hs", "hsa"}:
+        return "Human"
+    if s in {"sc", "sce"}:
+        return "Yeast"
+    return sample if sample in {"Human", "Yeast"} else None
+
+
+def annotation_for_sample(
+    sample: str,
+    gene: str,
+    sample_annotation_species: dict[str, str] | None = None,
+) -> dict[str, int]:
+    """Return UTR/CDS annotation for a possibly arbitrary sample label."""
+    species = infer_annotation_species(sample, sample_annotation_species)
+    if species is None:
+        raise KeyError(f"{sample}: no annotation species could be inferred")
+    return annotation_for(species, gene)
+
+
+def full_transcript_annotation(length: int) -> dict[str, int]:
+    """Fallback coordinates when no UTR/CDS annotation is available."""
+    n = int(length)
+    return {"l_tr": n, "l_utr5": 0, "l_cds": n, "l_utr3": 0}
+
+
 def classify_region(l_utr5: int, l_cds: int, pos1: int) -> str:
     """1-based position → region label."""
     if pos1 <= l_utr5:
