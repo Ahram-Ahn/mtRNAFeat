@@ -7,7 +7,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-source .venv/bin/activate
+PYTHON="${PYTHON:-python}"
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}src"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/mtrnafeat-mpl}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${TMPDIR:-/tmp}/mtrnafeat-cache}"
+mkdir -p "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
+MTRNAFEAT=("$PYTHON" -m mtrnafeat.cli)
 
 CONFIG="${CONFIG:-test_data/mini.config.yaml}"
 OUTDIR="${OUTDIR:-runs/substitution}"
@@ -17,7 +22,7 @@ MAX_NT="${MAX_NT:-300}"
 mkdir -p "$OUTDIR"
 echo "[substitution] running with N=$N max_nt=$MAX_NT → $OUTDIR"
 
-mtrnafeat substitution --config "$CONFIG" --outdir "$OUTDIR" -- --n "$N" --max-nt "$MAX_NT"
+"${MTRNAFEAT[@]}" substitution --config "$CONFIG" --outdir "$OUTDIR" -- --n "$N" --max-nt "$MAX_NT"
 
 echo
 echo "[substitution] outputs:"

@@ -13,7 +13,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-source .venv/bin/activate
+PYTHON="${PYTHON:-python}"
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}src"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/mtrnafeat-mpl}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${TMPDIR:-/tmp}/mtrnafeat-cache}"
+mkdir -p "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
+MTRNAFEAT=("$PYTHON" -m mtrnafeat.cli)
 
 STEP="${STEP:-landscape}"
 CONFIG="${CONFIG:-test_data/mini.config.yaml}"
@@ -22,7 +27,7 @@ EXTRA=("${@:1}")
 
 mkdir -p "$OUTDIR"
 echo "[single] $STEP → $OUTDIR (config=$CONFIG)"
-mtrnafeat "$STEP" --config "$CONFIG" --outdir "$OUTDIR" "${EXTRA[@]}"
+"${MTRNAFEAT[@]}" "$STEP" --config "$CONFIG" --outdir "$OUTDIR" "${EXTRA[@]}"
 
 echo
 echo "[single] outputs:"

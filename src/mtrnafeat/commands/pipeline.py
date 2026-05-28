@@ -10,8 +10,8 @@ DrTransformer kinetic folding is opt-in only — never auto-runs in
 
 Usage:
     mtrnafeat run-all --config configs/all.yaml --outdir runs/all
-    mtrnafeat run-all --parallel --config configs/all.yaml --outdir runs/all
-    mtrnafeat run-all --parallel --skip significance,cofold --config ...
+    mtrnafeat run-all --config configs/all.yaml --outdir runs/all -- --parallel
+    mtrnafeat run-all --config configs/all.yaml --outdir runs/all -- --parallel --skip cofold
 """
 from __future__ import annotations
 

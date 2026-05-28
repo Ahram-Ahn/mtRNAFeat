@@ -405,7 +405,10 @@ Plots default to `.svg` (editable in Inkscape/Illustrator). Switch to
 
 ## Examples
 
-[examples/](examples/) contains shell wrappers for the common run patterns:
+[examples/](examples/) contains shell wrappers for common run patterns.
+See [examples/README.md](examples/README.md) for the full chooser table,
+including full runs, partial runs, multi-sample runs, preflight checks, and
+one-gene debug runs.
 
 | Script | Purpose |
 |--------|---------|
@@ -414,6 +417,9 @@ Plots default to `.svg` (editable in Inkscape/Illustrator). Switch to
 | [03_real_all.sh](examples/03_real_all.sh) | Full pipeline on real data, both species, parallel. |
 | [04_substitution_run.sh](examples/04_substitution_run.sh) | `substitution` stage only, with tunable `N` and `MAX_NT`. |
 | [05_single_step.sh](examples/05_single_step.sh) | Run one subcommand by name (`STEP=tis ./05_single_step.sh`). |
+| [08_multisample_independent.sh](examples/08_multisample_independent.sh) | Independent analysis for arbitrary sample sets. |
+| [09_fast_overview.sh](examples/09_fast_overview.sh) | Quick partial run for first-pass plots. |
+| [12_db_folder_to_multisample.sh](examples/12_db_folder_to_multisample.sh) | Generate a config from a folder of `.db` files. |
 
 ## Development
 

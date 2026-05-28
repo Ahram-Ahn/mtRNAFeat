@@ -6,14 +6,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-source .venv/bin/activate
+PYTHON="${PYTHON:-python}"
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}src"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/mtrnafeat-mpl}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${TMPDIR:-/tmp}/mtrnafeat-cache}"
+mkdir -p "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
+MTRNAFEAT=("$PYTHON" -m mtrnafeat.cli)
 
 OUTDIR="${OUTDIR:-runs/smoke_parallel}"
 rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR"
 
 echo "[smoke-parallel] parallel run → $OUTDIR"
-mtrnafeat run-all --config test_data/mini.config.yaml --outdir "$OUTDIR" \
+"${MTRNAFEAT[@]}" run-all --config test_data/mini.config.yaml --outdir "$OUTDIR" \
        -- --parallel
 
 echo

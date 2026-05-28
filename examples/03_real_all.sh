@@ -6,13 +6,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-source .venv/bin/activate
+PYTHON="${PYTHON:-python}"
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}src"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/mtrnafeat-mpl}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${TMPDIR:-/tmp}/mtrnafeat-cache}"
+mkdir -p "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
+MTRNAFEAT=("$PYTHON" -m mtrnafeat.cli)
 
 OUTDIR="${OUTDIR:-runs/$(date +%Y-%m-%d)-all}"
 mkdir -p "$OUTDIR"
 
 echo "[real-all] parallel run → $OUTDIR"
-mtrnafeat run-all --config configs/all.yaml --outdir "$OUTDIR" -- --parallel
+"${MTRNAFEAT[@]}" run-all --config configs/all.yaml --outdir "$OUTDIR" -- --parallel
 echo
 echo "[real-all] top-level CSVs:"
 find "$OUTDIR" -maxdepth 2 -name "*.csv" | sort
