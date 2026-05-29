@@ -90,6 +90,26 @@ def test_per_gene_landscape_creates_per_species_files(mock_full, tmp_path):
         assert p.stat().st_size > 1_000
 
 
+def test_per_gene_landscape_handles_incomplete_grids(tmp_path):
+    """A 5-gene species creates 8 axes; unused axes must not trip strict zip."""
+    rows = []
+    for gene in ["GeneA", "GeneB", "GeneC", "GeneD", "GeneE"]:
+        for alpha in [0.0, 0.5]:
+            for tau in [160.0, 640.0]:
+                rows.append(dict(
+                    Species="Yeast", Gene=gene,
+                    alpha=alpha, tau=tau,
+                    CoFold_MFE=-100 + alpha,
+                    DMS_Eval_dG=-90,
+                    Gap_CoFold_minus_DMS=-10 + alpha,
+                    Abs_Gap=abs(-10 + alpha),
+                ))
+    paths = cofold_plot.per_gene_landscape(pd.DataFrame(rows), tmp_path, "png", dpi=72)
+    assert len(paths) == 1
+    assert paths[0].exists()
+    assert paths[0].stat().st_size > 1_000
+
+
 # ---------------------------------------------------------------------------
 # Narrative sanity: human needs more penalty than yeast
 # ---------------------------------------------------------------------------

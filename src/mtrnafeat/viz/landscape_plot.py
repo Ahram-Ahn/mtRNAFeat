@@ -432,9 +432,10 @@ def yeast_region_mode_panels(region_null_df, region_df, out_path: Path,
         obs_comp = obs.dropna(subset=["C_share_of_GC_Pct"])
         if not sim_comp.empty:
             try:
+                cmap = sns.light_palette(color, as_cmap=True)
                 sns.kdeplot(
                     data=sim_comp, x="Sequence_GC_Pct", y="C_share_of_GC_Pct",
-                    ax=ax, color=color, linewidths=1.4,
+                    ax=ax, fill=True, cmap=cmap, alpha=0.45,
                     levels=6, thresh=0.05, warn_singular=False,
                 )
             except Exception:

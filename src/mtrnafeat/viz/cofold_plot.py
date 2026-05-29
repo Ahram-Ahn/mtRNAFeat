@@ -303,7 +303,7 @@ def per_gene_landscape(full: pd.DataFrame, out_dir: Path, plot_format: str,
             ax.axis("off")
 
         im = None
-        for idx, (ax, gene) in enumerate(zip(axes.flat, genes, strict=True)):
+        for idx, (ax, gene) in enumerate(zip(axes.flat, genes, strict=False)):
             sub = sp_df[sp_df["Gene"] == gene]
             pivot = sub.pivot(index="tau", columns="alpha", values="Abs_Gap")
             pivot = pivot.iloc[::-1]

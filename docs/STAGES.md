@@ -781,7 +781,7 @@ want it), `kinetic` (opt-in only — requires DrTransformer on PATH),
 **Flags (after `--`)**:
 | Flag | Effect |
 |------|--------|
-| `--parallel` | fire stages concurrently in subprocesses (pool sized by `cpu_count()`). |
+| `--parallel` | fire stages concurrently in subprocesses (pool sized by `cpu_count()`); each child stage is forced to `n_workers=1` to avoid nested worker-pool oversubscription. |
 | `--include-comparison` | also run `compare` and `substitution` even for non-default sample labels. |
 | `--skip a,b,c` | comma-separated stage names to skip (use the underscore form for `local_probability` and `gene_panel`, e.g. `--skip local_probability,cofold`). |
 

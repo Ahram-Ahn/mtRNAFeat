@@ -27,13 +27,12 @@ def plot_path(out_dir, basename: str, fmt: str = "png") -> Path:
 SPINE_WIDTH = 1.25
 TICK_WIDTH = 1.15
 TICK_LENGTH = 5.0
-# Publication body-text spec (Nature/Cell): 7-9pt sans-serif. Titles slightly
-# larger but still ≤12pt so multi-panel figures composited at journal width
-# remain readable without rescaling.
-TITLE_FONTSIZE = 12
-LABEL_FONTSIZE = 10
-TICK_FONTSIZE = 9
-LEGEND_FONTSIZE = 9
+# Publication-style defaults with ticks kept large enough for direct SVG/PDF
+# inspection before final figure assembly.
+TITLE_FONTSIZE = 13
+LABEL_FONTSIZE = 11
+TICK_FONTSIZE = 10
+LEGEND_FONTSIZE = 10
 PANEL_LABEL_FONTSIZE = 12
 LINEWIDTH = 2.4
 AXIS_COLOR = "#222222"

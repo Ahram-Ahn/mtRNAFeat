@@ -161,8 +161,10 @@ value for that run only.
 - **Controls**: process pool size for stages that fan out per-gene
   (window, substitution, cofold, kinetic).
 - **Used by**: most heavy stages.
-- **When to change**: tune to physical cores. Note: `run-all ... -- --parallel`
-  uses a separate orchestrator pool sized by `cpu_count()`.
+- **When to change**: tune to physical cores for single-stage commands.
+  Note: `run-all ... -- --parallel` already parallelizes across stage
+  subprocesses and forces each child stage to `n_workers=1` to avoid
+  nested worker-pool oversubscription.
 
 ---
 

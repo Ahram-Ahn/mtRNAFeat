@@ -199,23 +199,35 @@ def run_cofold_sweep(cfg: Config, do_window_corr: bool = True
     if workers == 1 or len(jobs) == 1:
         full_frames, win_frames = _collect_sequential(jobs)
     else:
+        ex: ProcessPoolExecutor | None = None
         try:
-            with ProcessPoolExecutor(max_workers=workers) as ex:
-                futures = {ex.submit(_run_one, j): j for j in jobs}
-                full_frames = []
-                win_frames = []
-                for fut in progress(as_completed(futures), desc="cofold-sweep (genes)",
-                                      total=len(futures), unit="gene"):
-                    f, w = fut.result()
-                    full_frames.append(f)
-                    if not w.empty:
-                        win_frames.append(w)
+            ex = ProcessPoolExecutor(max_workers=workers)
+            futures = {ex.submit(_run_one, j): j for j in jobs}
+            full_frames = []
+            win_frames = []
+            for fut in progress(as_completed(futures), desc="cofold-sweep (genes)",
+                                  total=len(futures), unit="gene"):
+                f, w = fut.result()
+                full_frames.append(f)
+                if not w.empty:
+                    win_frames.append(w)
+            ex.shutdown()
+        except KeyboardInterrupt:
+            if ex is not None:
+                ex.shutdown(wait=False, cancel_futures=True)
+            raise
         except (OSError, PermissionError) as exc:
+            if ex is not None:
+                ex.shutdown(wait=False, cancel_futures=True)
             step(
                 "cofold multiprocessing unavailable "
                 f"({type(exc).__name__}: {exc}); falling back to sequential execution"
             )
             full_frames, win_frames = _collect_sequential(jobs)
+        except Exception:
+            if ex is not None:
+                ex.shutdown(wait=False, cancel_futures=True)
+            raise
 
     full = pd.concat(full_frames, ignore_index=True) if full_frames else pd.DataFrame()
     win = pd.concat(win_frames, ignore_index=True) if win_frames else pd.DataFrame()

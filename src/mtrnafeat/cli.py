@@ -55,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
         overrides["outdir"] = str(args.outdir)
     if args.seed is not None:
         overrides["seed"] = args.seed
+    env_n_workers = os.environ.get("MTRNAFEAT_N_WORKERS")
+    if env_n_workers:
+        overrides["n_workers"] = int(env_n_workers)
     cfg: Config = load_config(args.config, overrides if overrides else None)
     Path(cfg.outdir).mkdir(parents=True, exist_ok=True)
     if args.config is not None:

@@ -536,19 +536,31 @@ def run_substitution_thermo(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
     if workers == 1 or len(jobs) == 1:
         frames = _collect_sequential(jobs)
     else:
+        ex: ProcessPoolExecutor | None = None
         try:
-            with ProcessPoolExecutor(max_workers=workers) as ex:
-                futures = {ex.submit(_run_one, j): j for j in jobs}
-                frames = []
-                for fut in progress(as_completed(futures), desc="substitution (genes)",
-                                      total=len(futures), unit="gene"):
-                    frames.append(fut.result())
+            ex = ProcessPoolExecutor(max_workers=workers)
+            futures = {ex.submit(_run_one, j): j for j in jobs}
+            frames = []
+            for fut in progress(as_completed(futures), desc="substitution (genes)",
+                                  total=len(futures), unit="gene"):
+                frames.append(fut.result())
+            ex.shutdown()
+        except KeyboardInterrupt:
+            if ex is not None:
+                ex.shutdown(wait=False, cancel_futures=True)
+            raise
         except (OSError, PermissionError) as exc:
+            if ex is not None:
+                ex.shutdown(wait=False, cancel_futures=True)
             step(
                 "substitution multiprocessing unavailable "
                 f"({type(exc).__name__}: {exc}); falling back to sequential execution"
             )
             frames = _collect_sequential(jobs)
+        except Exception:
+            if ex is not None:
+                ex.shutdown(wait=False, cancel_futures=True)
+            raise
 
     dist = pd.concat([f for f in frames if not f.empty], ignore_index=True) if frames else pd.DataFrame()
     summary = _summarize(dist) if not dist.empty else pd.DataFrame()

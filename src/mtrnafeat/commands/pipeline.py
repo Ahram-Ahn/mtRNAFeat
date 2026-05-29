@@ -16,12 +16,11 @@ Usage:
 from __future__ import annotations
 
 import importlib
-import multiprocessing as mp
 import os
 import subprocess
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from mtrnafeat.config import Config
 
@@ -70,7 +69,13 @@ def _stages_for_config(cfg: Config, include_comparison: bool) -> tuple[str, ...]
     return SAMPLE_STAGES
 
 
-def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, seed: int | None) -> tuple[str, int, int]:
+def _run_subcommand_in_process(
+    name: str,
+    config_path: str | None,
+    outdir: str,
+    seed: int | None,
+    child_n_workers: int | None = None,
+) -> tuple[str, int, int]:
     """Subprocess entry — invoked by the parallel pool."""
     cmd = [sys.executable, "-m", "mtrnafeat.cli", name.replace("_", "-"),
            "--outdir", outdir]
@@ -81,12 +86,15 @@ def _run_subcommand_in_process(name: str, config_path: str | None, outdir: str, 
     extras = STAGE_EXTRAS.get(name)
     if extras:
         cmd += ["--", *extras]
+    env = os.environ.copy()
+    if child_n_workers is not None:
+        env["MTRNAFEAT_N_WORKERS"] = str(child_n_workers)
     started = time.time()
-    proc = subprocess.run(cmd, capture_output=False)
+    proc = subprocess.run(cmd, capture_output=False, env=env)
     return name, int(time.time() - started), int(proc.returncode)
 
 
-def _sequential(cfg: Config, skip: set[str], stages: tuple[str, ...]) -> None:
+def _sequential(cfg: Config, skip: set[str], stages: tuple[str, ...]) -> int:
     print(f"[mtrnafeat] running pipeline (sequential) → {cfg.outdir}")
     failures: list[tuple[str, str]] = []
     for name in stages:
@@ -106,13 +114,15 @@ def _sequential(cfg: Config, skip: set[str], stages: tuple[str, ...]) -> None:
             print(f"  ✗ {name} FAILED (exit {rc})")
     if failures:
         print("[mtrnafeat] pipeline complete WITH FAILURES: " + ", ".join(f"{n} ({why})" for n, why in failures))
+        return 1
     else:
         print("[mtrnafeat] pipeline complete.")
+        return 0
 
 
-def _parallel(cfg: Config, skip: set[str], config_path: str | None, stages: tuple[str, ...]) -> None:
+def _parallel(cfg: Config, skip: set[str], config_path: str | None, stages: tuple[str, ...]) -> int:
     print(f"[mtrnafeat] running pipeline (parallel) → {cfg.outdir}")
-    n_indep = max(2, min(len(stages) + 1, mp.cpu_count()))
+    n_indep = max(2, min(len(stages) + 1, os.cpu_count() or 2))
     outdir = str(cfg.outdir)
     seed = cfg.seed
 
@@ -120,14 +130,24 @@ def _parallel(cfg: Config, skip: set[str], config_path: str | None, stages: tupl
     finished: dict[str, int] = {}
     failures: list[tuple[str, int]] = []
     started = time.time()
+    # run-all already parallelizes across independent stage subprocesses.
+    # Letting each child stage also spawn cfg.n_workers processes can create
+    # dozens of ViennaRNA workers and make failures hard to diagnose.
+    child_n_workers = 1
 
-    with ProcessPoolExecutor(max_workers=n_indep) as ex:
+    with ThreadPoolExecutor(max_workers=n_indep) as ex:
         futures = {
-            ex.submit(_run_subcommand_in_process, name, config_path, outdir, seed): name
+            ex.submit(_run_subcommand_in_process, name, config_path, outdir, seed, child_n_workers): name
             for name in independent_to_run
         }
         for fut in as_completed(futures):
-            name, elapsed, rc = fut.result()
+            try:
+                name, elapsed, rc = fut.result()
+            except Exception as exc:
+                name = futures[fut]
+                elapsed = int(time.time() - started)
+                rc = 1
+                print(f"[mtrnafeat]   ✗ {name} RAISED: {exc!r} after {elapsed}s")
             finished[name] = elapsed
             wall = int(time.time() - started)
             if rc == 0:
@@ -141,6 +161,8 @@ def _parallel(cfg: Config, skip: set[str], config_path: str | None, stages: tupl
     print("[mtrnafeat] per-stage time: " + ", ".join(f"{k}={v}s" for k, v in finished.items()))
     if failures:
         print("[mtrnafeat] FAILURES: " + ", ".join(f"{n} (exit {rc})" for n, rc in failures))
+        return 1
+    return 0
 
 
 def run(cfg: Config, args: list[str] | None = None) -> int:
@@ -155,7 +177,6 @@ def run(cfg: Config, args: list[str] | None = None) -> int:
         )
     if parsed["parallel"]:
         config_path = os.environ.get("MTRNAFEAT_CONFIG_PATH")
-        _parallel(cfg, skip, config_path, stages)
+        return _parallel(cfg, skip, config_path, stages)
     else:
-        _sequential(cfg, skip, stages)
-    return 0
+        return _sequential(cfg, skip, stages)
